@@ -79,8 +79,8 @@ class Status(models.Model):
     )
 
     class Meta:
-        verbose_name = 'Задание'
-        verbose_name_plural = 'Задания'
+        verbose_name = 'Статус'
+        verbose_name_plural = 'Статусы'
 
     def __str__(self):
         return f"{self.client} - {self.status}"
