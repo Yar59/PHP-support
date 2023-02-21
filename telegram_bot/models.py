@@ -2,23 +2,23 @@ from django.db import models
 from phonenumber_field.modelfields import PhoneNumberField
 
 
-class Client(models.Model):
+class User(models.Model):
+    class UserRole(models.TextChoices):
+        CLIENT = "1", "PUB"
+        CON = "2", "CONTRACTOR"
+
+    role = models.CharField(
+        'Роль пользователя',
+        max_length=50,
+        choices=UserRole.choices,
+    )
+
+    tg_id = models.IntegerField('Telegram ID юзера')
     phonenumber = PhoneNumberField('Контактный номер', region="RU",)
 
     class Meta:
-        verbose_name = 'Клиент'
-        verbose_name_plural = 'Клиенты'
-
-    def __str__(self):
-        return f"{self.phonenumber}"
-
-
-class Worker(models.Model):
-    phonenumber = PhoneNumberField('Контактный номер', region="RU",)
-
-    class Meta:
-        verbose_name = 'Подрядчик'
-        verbose_name_plural = 'Подрядчики'
+        verbose_name = 'Пользователь'
+        verbose_name_plural = 'Пользователи'
 
     def __str__(self):
         return f"{self.phonenumber}"
@@ -43,29 +43,6 @@ class Subscription(models.Model):
 
 
 class Task(models.Model):
-    client = models.ForeignKey(
-        'User',
-        verbose_name='Клиент',
-        related_name='subscription',
-        on_delete=models.SET_NULL)
-    status = models.ForeignKey(
-        'Status',
-        verbose_name='Сататус задачи',
-        related_name='subscription',
-        on_delete=models.SET_NULL)
-    task = models.TextField('Задача')
-    created_at = models.DateTimeField('Публикация задачи')
-    end_at = models.DateTimeField('Конец задачи')
-
-    class Meta:
-        verbose_name = 'Задание'
-        verbose_name_plural = 'Задания'
-
-    def __str__(self):
-        return f"{self.client} - {self.status}"
-
-
-class Status(models.Model):
     class Proc(models.TextChoices):
         PUB = "1", "PUB"
         WORK = "2", "WORK"
@@ -77,10 +54,18 @@ class Status(models.Model):
         choices=Proc.choices,
         default=Proc.PUB
     )
+    client = models.ForeignKey(
+        'User',
+        verbose_name='Клиент',
+        related_name='tasks',
+        on_delete=models.SET_NULL)
+    task = models.TextField('Задача')
+    created_at = models.DateTimeField('Публикация задачи')
+    end_at = models.DateTimeField('Конец задачи')
 
     class Meta:
-        verbose_name = 'Статус'
-        verbose_name_plural = 'Статусы'
+        verbose_name = 'Задание'
+        verbose_name_plural = 'Задания'
 
     def __str__(self):
-        return f"{self.client} - {self.status}"
+        return f"{self.client}{self.task}{self.status}"
