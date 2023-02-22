@@ -29,7 +29,8 @@ class Subscription(models.Model):
         'User',
         verbose_name='Пользователь',
         related_name='subscription',
-        on_delete=models.CASCADE,)
+        on_delete=models.CASCADE,
+    )
     lvl = models.IntegerField(verbose_name='Уровень подписки')
     starts_at = models.DateTimeField('Начало подписки')
     end_at = models.DateTimeField('Конец подписки')
@@ -52,13 +53,16 @@ class Task(models.Model):
         'статус',
         max_length=50,
         choices=Proc.choices,
-        default=Proc.PUB
+        default=Proc.PUB,
     )
     client = models.ForeignKey(
         'User',
         verbose_name='Клиент',
         related_name='tasks',
-        on_delete=models.SET_NULL)
+        on_delete=models.SET_NULL,
+        null=True,
+    )
+
     task = models.TextField('Задача')
     created_at = models.DateTimeField('Публикация задачи')
     end_at = models.DateTimeField('Конец задачи')
@@ -68,4 +72,4 @@ class Task(models.Model):
         verbose_name_plural = 'Задания'
 
     def __str__(self):
-        return f"{self.client}{self.task}{self.status}"
+        return f"{self.client} {self.task} {self.status}"
