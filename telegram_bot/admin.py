@@ -1,5 +1,6 @@
 from django.contrib import admin
-from models import Task, Subscription, User
+
+from .models import Task, Subscription, User
 
 
 class SubscriptionInline(admin.TabularInline):
