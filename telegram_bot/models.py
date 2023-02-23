@@ -18,8 +18,7 @@ class User(models.Model):
         'Роль пользователя',
         max_length=50,
         choices=UserRole.choices,
-        blank=True,
-        null=True,
+        default=UserRole.CLIENT,
     )
 
     tg_id = models.IntegerField('Telegram ID юзера')
