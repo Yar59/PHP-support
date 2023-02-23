@@ -9,6 +9,11 @@ class User(models.Model):
         ADMIN = "ADM", "Администратор"
         MANAGER = "MNG", "Менеджер"
 
+    name = models.CharField(
+        'Имя пользователя',
+        max_length=50,
+    )
+
     role = models.CharField(
         'Роль пользователя',
         max_length=50,
