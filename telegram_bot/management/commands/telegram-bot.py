@@ -2,7 +2,13 @@ import logging
 from enum import Enum, auto
 
 import phonenumbers
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import (
+    KeyboardButton,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    ReplyKeyboardMarkup,
+    Update,
+)
 from telegram.ext import (
     Updater,
     CommandHandler,
@@ -10,7 +16,7 @@ from telegram.ext import (
     Filters,
     ConversationHandler,
     CallbackContext,
-    CallbackQueryHandler
+    CallbackQueryHandler,
 )
 from django.core.management.base import BaseCommand
 from django.conf import settings
@@ -22,10 +28,13 @@ logger = logging.getLogger(__name__)
 
 class States(Enum):
     start = auto()
+    authorization = auto()
+    get_phone = auto()
 
 
 class Transitions(Enum):
-    pass
+    authorization_reject = auto()
+    authorization_approve = auto()
 
 
 class Command(BaseCommand):
@@ -41,7 +50,19 @@ class Command(BaseCommand):
                 CommandHandler('start', start),
             ],
             states={
-
+                States.authorization:
+                    [
+                        CallbackQueryHandler(
+                            callback=callback_approve_handler,
+                            pass_chat_data=True
+                        ),
+                        MessageHandler(Filters.text, get_phone),
+                    ],
+                States.get_phone:
+                    [
+                        MessageHandler(Filters.text, get_phone_from_text),
+                        MessageHandler(Filters.contact, handle_role),
+                    ],
             },
             fallbacks=[
                 CommandHandler('cancel', cancel),
@@ -56,9 +77,82 @@ class Command(BaseCommand):
 
 
 def start(update: Update, context: CallbackContext) -> int:
-    update.message.reply_text(
-        'Добро пожаловать в бота!'
-    )
+    user_id = update.effective_user.id
+    chat_id = update.effective_chat.id
+    if is_new_user(user_id):
+        with open("agreement.pdf", "rb") as image:
+            agreement = image.read()
+
+        keyboard = [
+            [InlineKeyboardButton("Принимаю", callback_data=str(Transitions.authorization_approve))],
+            [InlineKeyboardButton("Отказываюсь", callback_data=str(Transitions.authorization_reject))],
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        update.message.reply_document(
+            agreement,
+            filename="Соглашение на обработку персональных данных.pdf",
+            caption="Для использования сервиса, примите соглашение об обработке персональных данных",
+            reply_markup=reply_markup,
+            parse_mode="Markdown"
+        )
+        return States.authorization
+
+
+def callback_approve_handler(update: Update, context: CallbackContext) -> int:
+    chat_id = update.effective_chat.id
+    user_id = update.effective_user.id
+    query = update.callback_query
+    data = query.data
+
+    if data == str(Transitions.authorization_approve):
+        context.bot.send_message(
+            chat_id=chat_id,
+            text="Введите имя и фамилию"
+        )
+        return States.authorization
+    elif data == str(Transitions.authorization_reject):
+        context.bot.send_message(
+            chat_id=chat_id,
+            text="Без соглашения на обработку мы не можем оказать вам услугу"
+        )
+        return ConversationHandler.END
+
+
+def get_phone(update: Update, context: CallbackContext) -> int:
+    user_name = update.message.text
+    context.user_data["user_id"] = update.message.from_user.id
+    context.user_data["full_name"] = user_name
+    split_name = user_name.split()
+    if not validate_fullname(split_name):
+        update.message.reply_text(
+            "*Введите корректные имя и фамилию!*\nПример: Василий Петров",
+            parse_mode="Markdown"
+        )
+    if validate_fullname(split_name):
+        message_keyboard = [
+            [
+                KeyboardButton(
+                    "Отправить свой номер телефона", request_contact=True
+                )
+            ]
+        ]
+        markup = ReplyKeyboardMarkup(
+            message_keyboard, one_time_keyboard=True, resize_keyboard=True
+        )
+        update.message.reply_text(
+            f"Введите телефон в формате +7... или нажав на кнопку ниже:",
+            reply_markup=markup
+        )
+        return States.get_phone
+
+
+def get_phone_from_text(update: Update, context: CallbackContext) -> int:
+    pass
+
+
+def handle_role(update: Update, context: CallbackContext) -> int:
+    pass
 
 
 def cancel(update: Update, context: CallbackContext) -> int:
@@ -70,7 +164,7 @@ def cancel(update: Update, context: CallbackContext) -> int:
 
 
 def is_new_user(user_id):
-    return not User.objects.filter(user_id=user_id).exists()
+    return not User.objects.filter(tg_id=user_id).exists()
 
 
 def save_user_data(data):
@@ -92,4 +186,4 @@ def validate_phonenumber(number):
 
 
 def delete_user(user_id):
-    User.objects.filter(user_id__contains=user_id).delete()
+    User.objects.filter(tg_id__contains=user_id).delete()
