@@ -30,11 +30,15 @@ class States(Enum):
     start = auto()
     authorization = auto()
     get_phone = auto()
+    choose_role = auto()
 
 
 class Transitions(Enum):
     authorization_reject = auto()
     authorization_approve = auto()
+    client = auto()
+    worker = auto()
+    manager = auto()
 
 
 class Command(BaseCommand):
@@ -60,8 +64,8 @@ class Command(BaseCommand):
                     ],
                 States.get_phone:
                     [
-                        MessageHandler(Filters.text, get_phone_from_text),
-                        MessageHandler(Filters.contact, handle_role),
+                        MessageHandler(Filters.text, handle_phone),
+                        MessageHandler(Filters.contact, handle_phone),
                     ],
             },
             fallbacks=[
@@ -130,13 +134,11 @@ def get_phone(update: Update, context: CallbackContext) -> int:
             parse_mode="Markdown"
         )
     if validate_fullname(split_name):
-        message_keyboard = [
-            [
-                KeyboardButton(
-                    "Отправить свой номер телефона", request_contact=True
-                )
-            ]
-        ]
+        message_keyboard = [[
+            KeyboardButton(
+                "Отправить свой номер телефона", request_contact=True
+            )
+        ]]
         markup = ReplyKeyboardMarkup(
             message_keyboard, one_time_keyboard=True, resize_keyboard=True
         )
@@ -147,8 +149,39 @@ def get_phone(update: Update, context: CallbackContext) -> int:
         return States.get_phone
 
 
-def get_phone_from_text(update: Update, context: CallbackContext) -> int:
-    pass
+def handle_phone(update: Update, context: CallbackContext) -> int:
+    chat_id = update.effective_chat.id
+    phone = update.message.contact.phone_number
+    if not phone:
+        phone = update.message.text
+    check_number = validate_phonenumber(phone)
+    if not check_number:
+        context.bot.send_message(
+            chat_id=chat_id,
+            text="ВВеден невалидный номер, попробуйте снова."
+        )
+        return States.get_phone
+    context.user_data["phone_number"] = phonenumbers.parse(phone, "RU")
+    if is_new_user(context.user_data["user_id"]):
+        save_user_data(context.user_data)
+    chat_id = update.effective_chat.id
+    context.bot.send_message(
+        chat_id=chat_id,
+        text="*Вы прошли регистрацию*\nНиже выберите блюда на свой вкус",
+        parse_mode="Markdown"
+    )
+    keyboard = [
+        [InlineKeyboardButton("Клиент", callback_data=Transitions.client)],
+        [InlineKeyboardButton("Исполнитель", callback_data=Transitions.worker)],
+        [InlineKeyboardButton("Менеджер", callback_data=Transitions.manager)],
+    ]
+    context.bot.send_message(
+        chat_id=chat_id,
+        text=f"Клиент - разместить заказ\nИсполнитель - получить заказы\nМенеджер - для управляющих",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="Markdown"
+    )
+    return States.choose_role
 
 
 def handle_role(update: Update, context: CallbackContext) -> int:
@@ -169,7 +202,7 @@ def is_new_user(user_id):
 
 def save_user_data(data):
     phone = f"{data['phone_number'].country_code}{data['phone_number'].national_number}"
-    User.objects.create(user_id=data["user_id"], full_name=data["full_name"], phonenumber=phone)
+    User.objects.create(tg_id=data["user_id"], name=data["full_name"], phonenumber=phone)
 
 
 def validate_fullname(fullname: list) -> bool | None:
@@ -187,3 +220,7 @@ def validate_phonenumber(number):
 
 def delete_user(user_id):
     User.objects.filter(tg_id__contains=user_id).delete()
+
+
+def get_user_role(user_id):
+    return User.objects.get(tg_id=user_id).role.lable
