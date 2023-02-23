@@ -31,6 +31,9 @@ class States(Enum):
     authorization = auto()
     get_phone = auto()
     choose_role = auto()
+    client = auto()
+    worker = auto()
+    manager = auto()
 
 
 class Transitions(Enum):
@@ -67,6 +70,10 @@ class Command(BaseCommand):
                         MessageHandler(Filters.text, handle_phone),
                         MessageHandler(Filters.contact, handle_phone),
                     ],
+                States.choose_role:
+                    [
+                        CallbackQueryHandler(handle_role),
+                    ]
             },
             fallbacks=[
                 CommandHandler('cancel', cancel),
@@ -82,7 +89,6 @@ class Command(BaseCommand):
 
 def start(update: Update, context: CallbackContext) -> int:
     user_id = update.effective_user.id
-    chat_id = update.effective_chat.id
     if is_new_user(user_id):
         with open("agreement.pdf", "rb") as image:
             agreement = image.read()
@@ -101,11 +107,23 @@ def start(update: Update, context: CallbackContext) -> int:
             parse_mode="Markdown"
         )
         return States.authorization
+    else:
+        keyboard = [
+            [InlineKeyboardButton("Клиент", callback_data=str(Transitions.client))],
+            [InlineKeyboardButton("Исполнитель", callback_data=str(Transitions.worker))],
+            [InlineKeyboardButton("Менеджер", callback_data=str(Transitions.manager))],
+        ]
+        context.bot.send_message(
+            chat_id=user_id,
+            text=f"Клиент - разместить заказ\nИсполнитель - получить заказы\nМенеджер - для управляющих",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="Markdown"
+        )
+        return States.choose_role
 
 
 def callback_approve_handler(update: Update, context: CallbackContext) -> int:
     chat_id = update.effective_chat.id
-    user_id = update.effective_user.id
     query = update.callback_query
     data = query.data
 
@@ -167,13 +185,13 @@ def handle_phone(update: Update, context: CallbackContext) -> int:
     chat_id = update.effective_chat.id
     context.bot.send_message(
         chat_id=chat_id,
-        text="*Вы прошли регистрацию*\nНиже выберите блюда на свой вкус",
+        text="*Вы прошли регистрацию*",
         parse_mode="Markdown"
     )
     keyboard = [
-        [InlineKeyboardButton("Клиент", callback_data=Transitions.client)],
-        [InlineKeyboardButton("Исполнитель", callback_data=Transitions.worker)],
-        [InlineKeyboardButton("Менеджер", callback_data=Transitions.manager)],
+        [InlineKeyboardButton("Клиент", callback_data=str(Transitions.client))],
+        [InlineKeyboardButton("Исполнитель", callback_data=str(Transitions.worker))],
+        [InlineKeyboardButton("Менеджер", callback_data=str(Transitions.manager))],
     ]
     context.bot.send_message(
         chat_id=chat_id,
@@ -185,7 +203,40 @@ def handle_phone(update: Update, context: CallbackContext) -> int:
 
 
 def handle_role(update: Update, context: CallbackContext) -> int:
-    pass
+    chat_id = update.effective_chat.id
+    user_role = get_user_role(chat_id)
+    query = update.callback_query
+    query.answer()
+    data = query.data
+    if data == str(Transitions.client):
+        pass
+        # TODO: Показать клаву клиента
+        return States.client
+    elif data == str(Transitions.worker):
+        if user_role == "Исполнитель":
+            pass
+            # TODO: Показать клаву работника
+            return States.worker
+        else:
+            message = "Для того чтобы стать нашим работником, свяжитесь с менеджером"
+    elif data == str(Transitions.manager):
+        if user_role == "Исполнитель":
+            pass
+            # TODO: Показать клаву манагера
+            return States.manager
+        else:
+            message = "К сожалению, вы не менеджер"
+    keyboard = [
+        [InlineKeyboardButton("Клиент", callback_data=str(Transitions.client))],
+        [InlineKeyboardButton("Исполнитель", callback_data=str(Transitions.worker))],
+        [InlineKeyboardButton("Менеджер", callback_data=str(Transitions.manager))],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    query.message.reply_text(
+        text=message,
+        reply_markup=reply_markup,
+    )
+    return States.choose_role
 
 
 def cancel(update: Update, context: CallbackContext) -> int:
@@ -223,4 +274,4 @@ def delete_user(user_id):
 
 
 def get_user_role(user_id):
-    return User.objects.get(tg_id=user_id).role.lable
+    return User.objects.get(tg_id=user_id).role
