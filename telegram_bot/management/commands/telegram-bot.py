@@ -21,7 +21,7 @@ from telegram.ext import (
 from django.core.management.base import BaseCommand
 from django.conf import settings
 
-from telegram_bot.models import User
+from telegram_bot.models import User, Task
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +34,9 @@ class States(Enum):
     client = auto()
     worker = auto()
     manager = auto()
+    work_choose = auto()
+    current_work = auto()
+    work_take = auto()
 
 
 class Transitions(Enum):
@@ -42,6 +45,8 @@ class Transitions(Enum):
     client = auto()
     worker = auto()
     manager = auto()
+    worklist = auto()
+    current_tasks = auto()
 
 
 class Command(BaseCommand):
@@ -73,7 +78,11 @@ class Command(BaseCommand):
                 States.choose_role:
                     [
                         CallbackQueryHandler(handle_role),
-                    ]
+                    ],
+                States.worker:
+                    [
+                        CallbackQueryHandler(choose_task_lvl1),
+                    ],
             },
             fallbacks=[
                 CommandHandler('cancel', cancel),
@@ -214,13 +223,21 @@ def handle_role(update: Update, context: CallbackContext) -> int:
         return States.client
     elif data == str(Transitions.worker):
         if user_role == "Исполнитель":
-            pass
-            # TODO: Показать клаву работника
+            message = "Привет, работник"
+            keyboard = [
+                [InlineKeyboardButton("Список задач", callback_data=str(Transitions.worklist))],
+                [InlineKeyboardButton("Текущие задачи", callback_data=str(Transitions.current_tasks))],
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            query.message.reply_text(
+                text=message,
+                reply_markup=reply_markup,
+            )
             return States.worker
         else:
             message = "Для того чтобы стать нашим работником, свяжитесь с менеджером"
     elif data == str(Transitions.manager):
-        if user_role == "Исполнитель":
+        if user_role == "Менеджер":
             pass
             # TODO: Показать клаву манагера
             return States.manager
@@ -237,6 +254,53 @@ def handle_role(update: Update, context: CallbackContext) -> int:
         reply_markup=reply_markup,
     )
     return States.choose_role
+
+
+def choose_task_lvl1(update: Update, context: CallbackContext) -> int:
+    user_id = update.effective_user.id
+    tasks = Task.objects.filter(status="WAIT")
+    tasks_in_work = Task.objects.filter(status="WORK", worker=user_id)
+    query = update.callback_query
+    query.answer()
+    data = query.data
+    if data == str(Transitions.worklist):
+        if tasks:
+            for task in tasks:
+                update.message.reply_text(
+                                          text=task,
+                                          parse_mode="Markdown"
+                )
+            return States.work_take
+        else:
+            update.message.reply_text(
+                "Нам очень жаль, но на данный момент задачи отсутствуют",
+                parse_mode="Markdown"
+            )
+            return States.worker
+    if data == str(Transitions.current_tasks):
+        if tasks_in_work:
+            for worktask in tasks_in_work:
+                update.message.reply_text(
+                                          text=worktask,
+                                          parse_mode="Markdown"
+                )
+            return States.current_work
+        else:
+            update.message.reply_text(
+                "Нам очень жаль, но на данный момент задачи отсутствуют",
+                parse_mode="Markdown"
+            )
+            return States.worker
+    keyboard = [
+        [InlineKeyboardButton("Список задач", callback_data=str(Transitions.worklist))],
+        [InlineKeyboardButton("Текущие задачи", callback_data=str(Transitions.current_tasks))],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    query.message.reply_text(
+        text="Выберете задачу",
+        reply_markup=reply_markup,
+    )
+    return States.worker
 
 
 def cancel(update: Update, context: CallbackContext) -> int:
