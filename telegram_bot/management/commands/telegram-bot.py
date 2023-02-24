@@ -81,7 +81,16 @@ class Command(BaseCommand):
                     ],
                 States.worker:
                     [
-                        CallbackQueryHandler(choose_task_lvl1),
+                        CallbackQueryHandler(choose_task_lvl1, pattern=f'^{Transitions.worklist}$'),
+                        CallbackQueryHandler(choose_task_lvl1, pattern=f'^{Transitions.current_tasks}$'),
+                    ],
+                States.work_choose:
+                    [
+                    
+                    ],
+                States.current_work:
+                    [
+                        
                     ],
             },
             fallbacks=[
@@ -222,20 +231,16 @@ def handle_role(update: Update, context: CallbackContext) -> int:
         # TODO: Показать клаву клиента
         return States.client
     elif data == str(Transitions.worker):
-        if user_role == "Исполнитель":
-            message = "Привет, работник"
-            keyboard = [
-                [InlineKeyboardButton("Список задач", callback_data=str(Transitions.worklist))],
-                [InlineKeyboardButton("Текущие задачи", callback_data=str(Transitions.current_tasks))],
-            ]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            query.message.reply_text(
-                text=message,
-                reply_markup=reply_markup,
-            )
-            return States.worker
-        else:
-            message = "Для того чтобы стать нашим работником, свяжитесь с менеджером"
+        keyboard = [
+            [InlineKeyboardButton("Список задач", callback_data=str(Transitions.worklist))],
+            [InlineKeyboardButton("Текущие задачи", callback_data=str(Transitions.current_tasks))],
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        query.message.reply_text(
+            text="Выберете меню",
+            reply_markup=reply_markup,
+        )
+        return States.worker
     elif data == str(Transitions.manager):
         if user_role == "Менеджер":
             pass
@@ -264,12 +269,8 @@ def choose_task_lvl1(update: Update, context: CallbackContext) -> int:
     query.answer()
     data = query.data
     if data == str(Transitions.worklist):
+        print(tasks)
         if tasks:
-            for task in tasks:
-                update.message.reply_text(
-                                          text=task,
-                                          parse_mode="Markdown"
-                )
             return States.work_take
         else:
             update.message.reply_text(
@@ -278,12 +279,8 @@ def choose_task_lvl1(update: Update, context: CallbackContext) -> int:
             )
             return States.worker
     if data == str(Transitions.current_tasks):
+        print(tasks_in_work)
         if tasks_in_work:
-            for worktask in tasks_in_work:
-                update.message.reply_text(
-                                          text=worktask,
-                                          parse_mode="Markdown"
-                )
             return States.current_work
         else:
             update.message.reply_text(
