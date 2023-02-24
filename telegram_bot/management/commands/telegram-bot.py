@@ -212,8 +212,9 @@ def get_phone(update: Update, context: CallbackContext) -> int:
 
 def handle_phone(update: Update, context: CallbackContext) -> int:
     chat_id = update.effective_chat.id
-    phone = update.message.contact.phone_number
-    if not phone:
+    try:
+        phone = update.message.contact.phone_number
+    except AttributeError:
         phone = update.message.text
     check_number = validate_phonenumber(phone)
     if not check_number:
