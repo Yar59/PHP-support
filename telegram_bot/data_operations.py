@@ -1,23 +1,20 @@
 import phonenumbers
 
-from .models import Task, User
+from telegram_bot.models import User
 
 
 def is_new_user(user_id):
-    return not User.objects.filter(user_id=user_id).exists()
-
-
-def task_in_work(task):
-    in_work = Task.Proc.WORK
-    return task['status'] is in_work
+    return not User.objects.filter(tg_id=user_id).exists()
 
 
 def save_user_data(data):
-    phone = f"{data['phonenumber'].country_code}{data['phonenumber'].national_number}"
-    User.objects.create(user_id=data["user_id"],
-                        role=data['role'],
-                        tg_id=data["tg_id"],
-                        phonenumber=phone,)
+    phone = f"{data['phone_number'].country_code}{data['phone_number'].national_number}"
+    User.objects.create(tg_id=data["user_id"], name=data["full_name"], phonenumber=phone)
+
+
+def validate_fullname(fullname: list) -> bool | None:
+    if len(fullname) > 1:
+        return True
 
 
 def validate_phonenumber(number):
@@ -29,4 +26,8 @@ def validate_phonenumber(number):
 
 
 def delete_user(user_id):
-    User.objects.filter(user_id__contains=user_id).delete()
+    User.objects.filter(tg_id__contains=user_id).delete()
+
+
+def get_user_role(user_id):
+    return User.objects.get(tg_id=user_id).role
