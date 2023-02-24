@@ -114,7 +114,8 @@ class Command(BaseCommand):
                     ],
                 States.show_client_tasks:
                     [
-
+                        CallbackQueryHandler(handle_role, pattern=f'^{Transitions.client}$'),
+                        CallbackQueryHandler(show_client_task),
                     ],
             },
             fallbacks=[
@@ -412,7 +413,25 @@ def show_client_tasks(update: Update, context: CallbackContext) -> int:
     chat_id = update.effective_chat.id
     query = update.callback_query
     query.answer()
-    return States.handle_subscriptions
+    keyboard = [
+        [InlineKeyboardButton("В меню", callback_data=str(Transitions.client))],
+    ]
+    message = 'Ваши заказы:\n'
+    tasks = User.objects.get(tg_id=chat_id).client_tasks.all()
+
+    if len(tasks):
+        for task in tasks:
+            message += f'Заказ №{task.id}, {task.task[:30]}\n\n'
+            keyboard.append([InlineKeyboardButton(f"К заказу {task.id}", callback_data=str(task.id))])
+    else:
+        message += 'Вы еще не создавали заказов'
+
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    query.message.reply_text(
+        text=message,
+        reply_markup=reply_markup,
+    )
+    return States.show_client_tasks
 
 
 def subscribe(update: Update, context: CallbackContext) -> int:
@@ -437,6 +456,10 @@ def subscribe(update: Update, context: CallbackContext) -> int:
         reply_markup=reply_markup,
     )
     return States.handle_subscribe
+
+
+def show_client_task(update: Update, context: CallbackContext) -> int:
+    pass
 
 
 def cancel(update: Update, context: CallbackContext) -> int:
