@@ -459,7 +459,23 @@ def subscribe(update: Update, context: CallbackContext) -> int:
 
 
 def show_client_task(update: Update, context: CallbackContext) -> int:
-    pass
+    chat_id = update.effective_chat.id
+    query = update.callback_query
+    query.answer()
+    data = query.data
+
+    task = Task.objects.get(id=int(data))
+
+    message = f'Заказ №{task.id}\n\n{task.task}'
+    keyboard = [
+        [InlineKeyboardButton("В меню", callback_data=str(Transitions.client))],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    query.message.reply_text(
+        text=message,
+        reply_markup=reply_markup,
+    )
+    return States.show_client_tasks
 
 
 def cancel(update: Update, context: CallbackContext) -> int:
