@@ -23,7 +23,7 @@ from django.core.management.base import BaseCommand
 from django.conf import settings
 from django.utils import timezone
 
-from telegram_bot.models import User, Subscription
+from telegram_bot.models import User, Subscription, Task
 
 logger = logging.getLogger(__name__)
 
@@ -94,7 +94,7 @@ class Command(BaseCommand):
                 States.handle_subscriptions:
                     [
                         CallbackQueryHandler(handle_role, pattern=f'^{Transitions.client}$'),
-                        CallbackQueryHandler(subscribe, pattern=f'^{Transitions.subscribe}$')
+                        CallbackQueryHandler(subscribe, pattern=f'^{Transitions.subscribe}$'),
                     ],
                 States.handle_subscribe:
                     [
@@ -108,7 +108,9 @@ class Command(BaseCommand):
                     ],
                 States.handle_task:
                     [
-
+                        MessageHandler(Filters.text, register_task),
+                        CallbackQueryHandler(show_subscriptions, pattern=f'^{Transitions.subscribe}$'),
+                        CallbackQueryHandler(handle_role, pattern=f'^{Transitions.client}$'),
                     ],
                 States.show_client_tasks:
                     [
@@ -216,7 +218,7 @@ def handle_phone(update: Update, context: CallbackContext) -> int:
     if not check_number:
         context.bot.send_message(
             chat_id=chat_id,
-            text="ВВеден невалидный номер, попробуйте снова."
+            text="Введен невалидный номер, попробуйте снова."
         )
         return States.get_phone
     context.user_data["phone_number"] = phonenumbers.parse(phone, "RU")
@@ -365,7 +367,45 @@ def create_task(update: Update, context: CallbackContext) -> int:
     chat_id = update.effective_chat.id
     query = update.callback_query
     query.answer()
-    return States.handle_subscriptions
+    keyboard = [
+        [InlineKeyboardButton("В меню", callback_data=str(Transitions.client))],
+    ]
+    subscriptions = User.objects.get(tg_id=chat_id).subscriptions.filter(starts_at__lte=timezone.now(),
+                                                                         end_at__gte=timezone.now())
+    if len(subscriptions):
+        message = dedent('''
+            Для того чтобы создать задачу, отправьте задание в текстовом формате
+            Не указывайте в задаче паролей/логинов или других чувствительных данных
+        ''')
+    else:
+        message = 'У вас нет активных подписок'
+        keyboard.append([InlineKeyboardButton("К подпискам", callback_data=str(Transitions.subscribe))])
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    query.message.reply_text(
+        text=message,
+        reply_markup=reply_markup,
+    )
+    return States.handle_task
+
+
+def register_task(update: Update, context: CallbackContext) -> int:
+    chat_id = update.effective_chat.id
+    text = update.effective_message.text
+
+    user = User.objects.get(tg_id=chat_id)
+    Task.objects.create(client=user, task=text, created_at=timezone.now())
+
+    message = f'Задача успешно создана\n\nТекст:\n{text}\n\nМы оповестим Вас как только найдем исполнителя '
+    keyboard = [
+        [InlineKeyboardButton("В меню", callback_data=str(Transitions.client))],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    context.bot.send_message(
+        chat_id,
+        text=message,
+        reply_markup=reply_markup,
+    )
+    return States.handle_task
 
 
 def show_client_tasks(update: Update, context: CallbackContext) -> int:

@@ -92,7 +92,11 @@ class Task(models.Model):
 
     task = models.TextField('Задача')
     created_at = models.DateTimeField('Публикация задачи')
-    end_at = models.DateTimeField('Конец задачи')
+    end_at = models.DateTimeField(
+        'Конец задачи',
+        blank=True,
+        null=True,
+    )
 
     class Meta:
         verbose_name = 'Задание'
