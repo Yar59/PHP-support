@@ -1,5 +1,6 @@
 import logging
 from enum import Enum, auto
+from textwrap import dedent
 
 import phonenumbers
 from telegram import (
@@ -22,7 +23,7 @@ from django.core.management.base import BaseCommand
 from django.conf import settings
 from django.utils import timezone
 
-from telegram_bot.models import User
+from telegram_bot.models import User, Subscription
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +39,8 @@ class States(Enum):
     handle_subscriptions = auto()
     handle_task = auto()
     show_client_tasks = auto()
+    handle_subscribe = auto()
+    handle_payment = auto()
 
 
 class Transitions(Enum):
@@ -92,6 +95,16 @@ class Command(BaseCommand):
                     [
                         CallbackQueryHandler(handle_role, pattern=f'^{Transitions.client}$'),
                         CallbackQueryHandler(subscribe, pattern=f'^{Transitions.subscribe}$')
+                    ],
+                States.handle_subscribe:
+                    [
+                        CallbackQueryHandler(handle_role, pattern=f'^{Transitions.client}$'),
+                        CallbackQueryHandler(handle_payment),
+                    ],
+                States.handle_payment:
+                    [
+                        CallbackQueryHandler(handle_role, pattern=f'^{Transitions.client}$'),
+                        CallbackQueryHandler(create_subscription),
                     ],
                 States.handle_task:
                     [
@@ -295,6 +308,59 @@ def show_subscriptions(update: Update, context: CallbackContext) -> int:
     return States.handle_subscriptions
 
 
+def handle_payment(update: Update, context: CallbackContext) -> int:
+    chat_id = update.effective_chat.id
+    query = update.callback_query
+    query.answer()
+    data = query.data
+    price = ''
+    if data == 'economy':
+        message = 'Стоимость подписки 100$'
+        price = '100'
+    elif data == 'default':
+        message = 'Стоимость подписки 200$'
+        price = '200'
+    elif data == 'vip':
+        message = 'Стоимость подписки 300$'
+        price = '300'
+    keyboard = [
+        [InlineKeyboardButton("Оплатить подписку", callback_data=price)],
+        [InlineKeyboardButton("В меню", callback_data=str(Transitions.client))],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    query.message.reply_text(
+        text=message,
+        reply_markup=reply_markup,
+    )
+    return States.handle_payment
+
+
+def create_subscription(update: Update, context: CallbackContext) -> int:
+    chat_id = update.effective_chat.id
+    query = update.callback_query
+    query.answer()
+    data = query.data
+    user = User.objects.get(tg_id=chat_id)
+    starts_at = timezone.now()
+    end_at = starts_at + timezone.timedelta(days=30)
+    if data == '100':
+        subscription_level = 'Экономный'
+    elif data == '200':
+        subscription_level = 'Стандарт'
+    elif data == '300':
+        subscription_level = 'ВИП'
+    Subscription.objects.create(user=user, lvl=subscription_level, starts_at=starts_at, end_at=end_at)
+    keyboard = [
+        [InlineKeyboardButton("В меню", callback_data=str(Transitions.client))],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    query.message.reply_text(
+        text='Подписка успешно оплачена',
+        reply_markup=reply_markup,
+    )
+    return States.handle_subscriptions
+
+
 def create_task(update: Update, context: CallbackContext) -> int:
     chat_id = update.effective_chat.id
     query = update.callback_query
@@ -310,7 +376,27 @@ def show_client_tasks(update: Update, context: CallbackContext) -> int:
 
 
 def subscribe(update: Update, context: CallbackContext) -> int:
-    pass
+    chat_id = update.effective_chat.id
+    query = update.callback_query
+    query.answer()
+    message = dedent('''
+        Тарифы:
+        Эконом - до 5 заявок в месяц на помощь, по заявке ответят в течение суток
+        Стандарт - до 15 заявок в месяц, возможность закрепить подрядчика за собой, заявка будет рассмотрена в течение часа
+        VIP - до 60 заявок в месяц, возможность увидеть контакты подрядчика, заявка будет рассмотрена в течение часа 
+    ''')
+    keyboard = [
+        [InlineKeyboardButton("Эконом - 100$", callback_data='economy')],
+        [InlineKeyboardButton("Стандарт - 200$", callback_data='default')],
+        [InlineKeyboardButton("♂dungeon master♂ - 300$", callback_data='vip')],
+        [InlineKeyboardButton("В меню", callback_data=str(Transitions.client))],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    query.message.reply_text(
+        text=message,
+        reply_markup=reply_markup,
+    )
+    return States.handle_subscribe
 
 
 def cancel(update: Update, context: CallbackContext) -> int:
