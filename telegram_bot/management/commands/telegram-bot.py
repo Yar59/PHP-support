@@ -34,6 +34,9 @@ class States(Enum):
     client = auto()
     worker = auto()
     manager = auto()
+    handle_subscriptions = auto()
+    handle_task = auto()
+    show_client_tasks = auto()
 
 
 class Transitions(Enum):
@@ -42,6 +45,10 @@ class Transitions(Enum):
     client = auto()
     worker = auto()
     manager = auto()
+    subscriptions = ()
+    create_task = auto()
+    tasks = auto()
+    subscribe = auto()
 
 
 class Command(BaseCommand):
@@ -73,7 +80,25 @@ class Command(BaseCommand):
                 States.choose_role:
                     [
                         CallbackQueryHandler(handle_role),
-                    ]
+                    ],
+                States.client:
+                    [
+                        CallbackQueryHandler(show_subscriptions, pattern=f'^{Transitions.subscriptions}$'),
+                        CallbackQueryHandler(create_task, pattern=f'^{Transitions.create_task}$'),
+                        CallbackQueryHandler(show_client_tasks, pattern=f'^{Transitions.tasks}$'),
+                    ],
+                States.handle_subscriptions:
+                    [
+
+                    ],
+                States.handle_task:
+                    [
+
+                    ],
+                States.show_client_tasks:
+                    [
+
+                    ],
             },
             fallbacks=[
                 CommandHandler('cancel', cancel),
@@ -209,8 +234,16 @@ def handle_role(update: Update, context: CallbackContext) -> int:
     query.answer()
     data = query.data
     if data == str(Transitions.client):
-        pass
-        # TODO: Показать клаву клиента
+        keyboard = [
+            [InlineKeyboardButton("Подписки", callback_data=str(Transitions.subscriptions))],
+            [InlineKeyboardButton("Оформить заказ", callback_data=str(Transitions.create_task))],
+            [InlineKeyboardButton("История заказов", callback_data=str(Transitions.tasks))],
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        query.message.reply_text(
+            text="Куда отправимся?",
+            reply_markup=reply_markup,
+        )
         return States.client
     elif data == str(Transitions.worker):
         if user_role == "Исполнитель":
@@ -237,6 +270,36 @@ def handle_role(update: Update, context: CallbackContext) -> int:
         reply_markup=reply_markup,
     )
     return States.choose_role
+
+
+def show_subscriptions(update: Update, context: CallbackContext) -> int:
+    chat_id = update.effective_chat.id
+    query = update.callback_query
+    query.answer()
+    keyboard = [
+        [InlineKeyboardButton("Оформить подписку", callback_data=str(Transitions.client))],
+        [InlineKeyboardButton("В меню", callback_data=str(Transitions.client))],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    query.message.reply_text(
+        text="У вас нет подписок",
+        reply_markup=reply_markup,
+    )
+    return States.handle_subscriptions
+
+
+def create_task(update: Update, context: CallbackContext) -> int:
+    chat_id = update.effective_chat.id
+    query = update.callback_query
+    query.answer()
+    return States.handle_subscriptions
+
+
+def show_client_tasks(update: Update, context: CallbackContext) -> int:
+    chat_id = update.effective_chat.id
+    query = update.callback_query
+    query.answer()
+    return States.handle_subscriptions
 
 
 def cancel(update: Update, context: CallbackContext) -> int:
