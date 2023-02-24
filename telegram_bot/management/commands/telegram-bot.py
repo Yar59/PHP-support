@@ -25,6 +25,7 @@ from django.utils import timezone
 
 from telegram_bot.models import User, Subscription, Task
 
+
 logger = logging.getLogger(__name__)
 
 
@@ -41,6 +42,9 @@ class States(Enum):
     show_client_tasks = auto()
     handle_subscribe = auto()
     handle_payment = auto()
+    work_choose = auto()
+    current_work = auto()
+    work_take = auto()
 
 
 class Transitions(Enum):
@@ -53,6 +57,8 @@ class Transitions(Enum):
     create_task = auto()
     tasks = auto()
     subscribe = auto()
+    worklist = auto()
+    current_tasks = auto()
 
 
 class Command(BaseCommand):
@@ -116,6 +122,19 @@ class Command(BaseCommand):
                     [
                         CallbackQueryHandler(handle_role, pattern=f'^{Transitions.client}$'),
                         CallbackQueryHandler(show_client_task),
+                    ],
+                States.worker:
+                    [
+                        CallbackQueryHandler(choose_task_lvl1, pattern=f'^{Transitions.worklist}$'),
+                        CallbackQueryHandler(choose_task_lvl1, pattern=f'^{Transitions.current_tasks}$'),
+                    ],
+                States.work_choose:
+                    [
+                    
+                    ],
+                States.current_work:
+                    [
+
                     ],
             },
             fallbacks=[
@@ -265,14 +284,18 @@ def handle_role(update: Update, context: CallbackContext) -> int:
         )
         return States.client
     elif data == str(Transitions.worker):
-        if user_role == "Исполнитель":
-            pass
-            # TODO: Показать клаву работника
-            return States.worker
-        else:
-            message = "Для того чтобы стать нашим работником, свяжитесь с менеджером"
+        keyboard = [
+            [InlineKeyboardButton("Список задач", callback_data=str(Transitions.worklist))],
+            [InlineKeyboardButton("Текущие задачи", callback_data=str(Transitions.current_tasks))],
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        query.message.reply_text(
+            text="Выберете меню",
+            reply_markup=reply_markup,
+        )
+        return States.worker
     elif data == str(Transitions.manager):
-        if user_role == "Исполнитель":
+        if user_role == "Менеджер":
             pass
             # TODO: Показать клаву манагера
             return States.manager
@@ -477,6 +500,45 @@ def show_client_task(update: Update, context: CallbackContext) -> int:
         reply_markup=reply_markup,
     )
     return States.show_client_tasks
+
+
+def choose_task_lvl1(update: Update, context: CallbackContext) -> int:
+    user_id = update.effective_user.id
+    tasks = Task.objects.filter(status="WAIT")
+    tasks_in_work = Task.objects.filter(status="WORK", worker=user_id)
+    query = update.callback_query
+    query.answer()
+    data = query.data
+    if data == str(Transitions.worklist):
+        print(tasks)
+        if tasks:
+            return States.work_take
+        else:
+            update.message.reply_text(
+                "Нам очень жаль, но на данный момент задачи отсутствуют",
+                parse_mode="Markdown"
+            )
+            return States.worker
+    if data == str(Transitions.current_tasks):
+        print(tasks_in_work)
+        if tasks_in_work:
+            return States.current_work
+        else:
+            update.message.reply_text(
+                "Нам очень жаль, но на данный момент задачи отсутствуют",
+                parse_mode="Markdown"
+            )
+            return States.worker
+    keyboard = [
+        [InlineKeyboardButton("Список задач", callback_data=str(Transitions.worklist))],
+        [InlineKeyboardButton("Текущие задачи", callback_data=str(Transitions.current_tasks))],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    query.message.reply_text(
+        text="Выберете задачу",
+        reply_markup=reply_markup,
+    )
+    return States.worker
 
 
 def cancel(update: Update, context: CallbackContext) -> int:
