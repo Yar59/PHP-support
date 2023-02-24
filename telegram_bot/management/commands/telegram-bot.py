@@ -20,6 +20,7 @@ from telegram.ext import (
 )
 from django.core.management.base import BaseCommand
 from django.conf import settings
+from django.utils import timezone
 
 from telegram_bot.models import User
 
@@ -89,7 +90,8 @@ class Command(BaseCommand):
                     ],
                 States.handle_subscriptions:
                     [
-
+                        CallbackQueryHandler(handle_role, pattern=f'^{Transitions.client}$'),
+                        CallbackQueryHandler(subscribe, pattern=f'^{Transitions.subscribe}$')
                     ],
                 States.handle_task:
                     [
@@ -276,13 +278,18 @@ def show_subscriptions(update: Update, context: CallbackContext) -> int:
     chat_id = update.effective_chat.id
     query = update.callback_query
     query.answer()
+    subscriptions = User.objects.get(tg_id=chat_id).subscriptions.filter(starts_at__lte=timezone.now(), end_at__gte=timezone.now())
+    if len(subscriptions):
+        message = ''.join([f'{subscription.lvl}, которая истекает {subscription.end_at}\n' for subscription in subscriptions])
+    else:
+        message = 'У вас нет активных подписок'
     keyboard = [
-        [InlineKeyboardButton("Оформить подписку", callback_data=str(Transitions.client))],
+        [InlineKeyboardButton("Оформить подписку", callback_data=str(Transitions.subscribe))],
         [InlineKeyboardButton("В меню", callback_data=str(Transitions.client))],
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     query.message.reply_text(
-        text="У вас нет подписок",
+        text=message,
         reply_markup=reply_markup,
     )
     return States.handle_subscriptions
@@ -300,6 +307,10 @@ def show_client_tasks(update: Update, context: CallbackContext) -> int:
     query = update.callback_query
     query.answer()
     return States.handle_subscriptions
+
+
+def subscribe(update: Update, context: CallbackContext) -> int:
+    pass
 
 
 def cancel(update: Update, context: CallbackContext) -> int:
