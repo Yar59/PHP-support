@@ -139,4 +139,32 @@ class Message(models.Model):
         verbose_name_plural = 'Задания'
 
     def __str__(self):
-        return f"{self.client} {self.worker} {self.task}"
+        return f"{self.first_person} {self.second_person} {self.task_message}"
+
+
+class Support(models.Model):
+    user = models.ForeignKey(
+        User,
+        verbose_name='Отправитель',
+        related_name='support_message',
+        on_delete=models.SET_NULL,
+        null=True,
+    )
+    task = models.ForeignKey(
+        Task,
+        verbose_name='Задача',
+        related_name='support_task',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+    )
+    created_at = models.DateTimeField('Дата отправки')
+    text = models.TextField('Сообщение')
+
+    class Meta:
+        ordering = ['created_at']
+        verbose_name = 'Задание'
+        verbose_name_plural = 'Задания'
+
+    def __str__(self):
+        return f"{self.user} {self.task} {self.created_at}"
