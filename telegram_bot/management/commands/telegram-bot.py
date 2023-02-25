@@ -136,12 +136,13 @@ class Command(BaseCommand):
                     ],
                 States.work_choose:
                     [
-                    
+                        [InlineKeyboardButton("Список задач", callback_data=str(Transitions.worklist))],
                     ],
                 States.current_work:
                     [
-
+                        [InlineKeyboardButton("текущие задачи", callback_data=str(Transitions.current_tasks))],
                     ],
+
             },
             fallbacks=[
                 CommandHandler('cancel', cancel),
@@ -546,6 +547,53 @@ def choose_task_lvl1(update: Update, context: CallbackContext) -> int:
     )
     return States.worker
 
+
+def choose_task_list(update: Update, context: CallbackContext) -> int:
+    user_id = update.effective_user.id
+    tasks = Task.objects.filter(status="WAIT")
+    query = update.callback_query
+    query.answer()
+    data = query.data
+    if data == str(Transitions.worklist):
+        print(tasks[1])
+        if tasks:
+            return States.work_choose
+        else:
+            update.message.reply_text(
+                "Нам очень жаль, но на данный момент задачи отсутствуют",
+                parse_mode="Markdown"
+            )
+            return States.worker
+    keyboard = [
+        [InlineKeyboardButton("Назад", callback_data=str(Transitions.worklist))],
+        [InlineKeyboardButton("Взять", callback_data=str(Transitions.work_take))],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    query.message.reply_text(
+        text="Выберете задачу",
+        reply_markup=reply_markup,
+    )
+    return States.worker
+
+
+def take_work(update: Update, context: CallbackContext) -> int:
+    user_id = update.effective_user.id
+    chat_id = update.effective_chat.id
+    phone = update.message.contact.phone_number
+    query = update.callback_query
+    query.answer()
+    data = query.data
+    if data == str(Transitions.work_take):
+        Task.objects.create(user__number=phone)
+    keyboard = [
+        [InlineKeyboardButton("Назад", callback_data=str(Transitions.worklist))],
+        [InlineKeyboardButton("Взять", callback_data=str(Transitions.work_take))],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    query.message.reply_text(
+        text="Выберете задачу",
+        reply_markup=reply_markup,
+    )
 
 def cancel(update: Update, context: CallbackContext) -> int:
     update.message.reply_text(
