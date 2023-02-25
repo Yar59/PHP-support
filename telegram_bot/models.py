@@ -104,3 +104,39 @@ class Task(models.Model):
 
     def __str__(self):
         return f"{self.client} {self.task} {self.status}"
+
+
+class Message(models.Model):
+    first_person = models.ForeignKey(
+        User,
+        verbose_name='Клиент',
+        related_name='first_messages',
+        on_delete=models.SET_NULL,
+        null=True,
+    )
+    second_person = models.ForeignKey(
+        User,
+        verbose_name='Исполнитель',
+        related_name='second_messages',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+    )
+    task_message = models.ForeignKey(
+        Task,
+        verbose_name='Задача',
+        related_name='messages',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+    )
+    created_at = models.DateTimeField('Дата отправки')
+    text = models.TextField('Сообщение')
+
+    class Meta:
+        ordering = ['created_at']
+        verbose_name = 'Задание'
+        verbose_name_plural = 'Задания'
+
+    def __str__(self):
+        return f"{self.client} {self.worker} {self.task}"
