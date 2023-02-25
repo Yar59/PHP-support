@@ -1,17 +1,31 @@
 from django.contrib import admin
 
-from .models import Task, Subscription, User
+from .models import Task, Subscription, User, Support, Message
 
 
 class SubscriptionInline(admin.TabularInline):
     model = Subscription
 
 
+class MessageFirstInline(admin.TabularInline):
+    model = Message
+    fk_name = "first_person"
+
+
+class MessagSecondInline(admin.TabularInline):
+    model = Message
+    fk_name = "second_person"
+
+
+class SupportionInline(admin.TabularInline):
+    model = Support
+
+
 @admin.register(User)
 class ProductAdmin(admin.ModelAdmin):
     search_fields = ['phonenumber']
 
-    inlines = [SubscriptionInline]
+    inlines = [SubscriptionInline, MessageFirstInline, MessagSecondInline, SupportionInline]
 
 
 @admin.register(Task)

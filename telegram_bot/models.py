@@ -135,8 +135,8 @@ class Message(models.Model):
 
     class Meta:
         ordering = ['created_at']
-        verbose_name = 'Задание'
-        verbose_name_plural = 'Задания'
+        verbose_name = 'Сообщение'
+        verbose_name_plural = 'Сообщения'
 
     def __str__(self):
         return f"{self.first_person} {self.second_person} {self.task_message}"
@@ -163,8 +163,8 @@ class Support(models.Model):
 
     class Meta:
         ordering = ['created_at']
-        verbose_name = 'Задание'
-        verbose_name_plural = 'Задания'
+        verbose_name = 'Поддержка'
+        verbose_name_plural = 'Поддержка'
 
     def __str__(self):
         return f"{self.user} {self.task} {self.created_at}"
