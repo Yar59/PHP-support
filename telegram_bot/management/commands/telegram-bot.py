@@ -50,7 +50,7 @@ class States(Enum):
     handle_payment = auto()
     work_choose = auto()
     current_work = auto()
-    work_take = auto()
+    take_work = auto()
 
 
 class Transitions(Enum):
@@ -65,6 +65,7 @@ class Transitions(Enum):
     subscribe = auto()
     worklist = auto()
     current_tasks = auto()
+    take = auto()
 
 
 class Command(BaseCommand):
@@ -136,12 +137,16 @@ class Command(BaseCommand):
                     ],
                 States.work_choose:
                     [
-                        [InlineKeyboardButton("Список задач", callback_data=str(Transitions.worklist))],
+                        [InlineKeyboardButton(choose_task_list, callback_data=str(Transitions.worklist))],
                     ],
                 States.current_work:
                     [
-                        [InlineKeyboardButton("текущие задачи", callback_data=str(Transitions.current_tasks))],
+                        [InlineKeyboardButton(choose_task_list, callback_data=str(Transitions.current_tasks))],
                     ],
+                States.take_work:
+                    [
+                        [InlineKeyboardButton(take_work, callback_data=str(Transitions.current_tasks))],
+                    ],    
 
             },
             fallbacks=[
@@ -512,37 +517,27 @@ def show_client_task(update: Update, context: CallbackContext) -> int:
 def choose_task_lvl1(update: Update, context: CallbackContext) -> int:
     user_id = update.effective_user.id
     tasks = Task.objects.filter(status="WAIT")
-    tasks_in_work = Task.objects.filter(status="WORK", worker=user_id)
+    tasks_in_work = User.objects.get(tg_id=user_id).worker_tasks.all()
     query = update.callback_query
     query.answer()
     data = query.data
     if data == str(Transitions.worklist):
-        print(tasks)
-        if tasks:
-            return States.work_take
+        if len(tasks) > 0:
+            return States.take_work
         else:
-            update.message.reply_text(
-                "Нам очень жаль, но на данный момент задачи отсутствуют",
-                parse_mode="Markdown"
-            )
-            return States.worker
+            message = "Нам очень жаль, но на данный момент задачи отсутствуют"
     if data == str(Transitions.current_tasks):
-        print(tasks_in_work)
         if tasks_in_work:
             return States.current_work
         else:
-            update.message.reply_text(
-                "Нам очень жаль, но на данный момент задачи отсутствуют",
-                parse_mode="Markdown"
-            )
-            return States.worker
+            message = "Нам очень жаль, но на данный момент задачи отсутствуют"
     keyboard = [
         [InlineKeyboardButton("Список задач", callback_data=str(Transitions.worklist))],
         [InlineKeyboardButton("Текущие задачи", callback_data=str(Transitions.current_tasks))],
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     query.message.reply_text(
-        text="Выберете задачу",
+        text=message,
         reply_markup=reply_markup,
     )
     return States.worker
@@ -555,25 +550,20 @@ def choose_task_list(update: Update, context: CallbackContext) -> int:
     query.answer()
     data = query.data
     if data == str(Transitions.worklist):
-        print(tasks[1])
-        if tasks:
+        if len(tasks):
             return States.work_choose
         else:
-            update.message.reply_text(
-                "Нам очень жаль, но на данный момент задачи отсутствуют",
-                parse_mode="Markdown"
-            )
-            return States.worker
+            message = "Нам очень жаль, но на данный момент задачи отсутствуют"
     keyboard = [
         [InlineKeyboardButton("Назад", callback_data=str(Transitions.worklist))],
-        [InlineKeyboardButton("Взять", callback_data=str(Transitions.work_take))],
+        [InlineKeyboardButton("Взять", callback_data=str(Transitions.take))],
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     query.message.reply_text(
-        text="Выберете задачу",
+        text=message,
         reply_markup=reply_markup,
     )
-    return States.worker
+    return States.work_choose
 
 
 def take_work(update: Update, context: CallbackContext) -> int:
@@ -583,17 +573,19 @@ def take_work(update: Update, context: CallbackContext) -> int:
     query = update.callback_query
     query.answer()
     data = query.data
-    if data == str(Transitions.work_take):
+    if data == str(Transitions.take):
         Task.objects.create(user__number=phone)
     keyboard = [
         [InlineKeyboardButton("Назад", callback_data=str(Transitions.worklist))],
-        [InlineKeyboardButton("Взять", callback_data=str(Transitions.work_take))],
+        [InlineKeyboardButton("Взять", callback_data=str(Transitions.take))],
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     query.message.reply_text(
         text="Выберете задачу",
         reply_markup=reply_markup,
     )
+    return States.current_work
+
 
 def cancel(update: Update, context: CallbackContext) -> int:
     update.message.reply_text(
