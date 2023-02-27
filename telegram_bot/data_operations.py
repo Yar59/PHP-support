@@ -19,8 +19,10 @@ def validate_fullname(fullname: list) -> bool | None:
 
 def validate_phonenumber(number):
     try:
-        parsed_number = phonenumbers.parse(number, 'RU')
-        return phonenumbers.is_valid_number_for_region(parsed_number, 'RU')
+        phonenumber = phonenumbers.parse(number, 'RU')
+        return phonenumbers.format_number(phonenumber,
+                                          phonenumbers.PhoneNumberFormat.E164,
+                                          )
     except phonenumbers.phonenumberutil.NumberParseException:
         return False
 
