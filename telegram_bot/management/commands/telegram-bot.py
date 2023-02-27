@@ -579,6 +579,7 @@ def handle_message(update: Update, context: CallbackContext) -> int:
     task = Task.objects.get(id=context.user_data['current_task'])
     if user.role == 'CL':
         recipient_id = task.client.tg_id
+        Message.objects.create(task_message=task, first_person=user, text=user_message, created_at=timezone.now())
         context.bot.send_message(
             recipient_id,
             text=f'Сообщение от Исполниеля по вашему заказу №{task.id}:\n {user_message}',
@@ -588,6 +589,7 @@ def handle_message(update: Update, context: CallbackContext) -> int:
         ]
     elif user.role == 'WK':
         recipient_id = task.worker.tg_id
+        Message.objects.create(task_message=task, second_person=user, text=user_message, created_at=timezone.now())
         context.bot.send_message(
             recipient_id,
             text=f'Сообщение от Заказчика по вашему заказу №{task.id}:\n {user_message}',
