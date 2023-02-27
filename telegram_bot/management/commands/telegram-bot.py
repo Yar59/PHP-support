@@ -53,6 +53,7 @@ class States(Enum):
     show_worker_tasks = auto()
     take_work = auto()
     handle_message = auto()
+    handle_support_message = auto()
 
 
 class Transitions(Enum):
@@ -72,6 +73,7 @@ class Transitions(Enum):
     unaccepted = auto()
     expired = auto()
     message = auto()
+    support_message = auto()
 
 
 class Command(BaseCommand):
@@ -135,6 +137,7 @@ class Command(BaseCommand):
                     [
                         CallbackQueryHandler(handle_role, pattern=f'^{Transitions.client}$'),
                         CallbackQueryHandler(create_message, pattern=f'^{Transitions.message}$'),
+                        CallbackQueryHandler(create_support_message, pattern=f'^{Transitions.support_message}$'),
                         CallbackQueryHandler(show_client_task),
                     ],
                 States.worker:
@@ -147,6 +150,7 @@ class Command(BaseCommand):
                         CallbackQueryHandler(handle_role, pattern=f'^{Transitions.worker}$'),
                         CallbackQueryHandler(get_deadline, pattern=f'^{Transitions.take}$'),
                         CallbackQueryHandler(create_message, pattern=f'^{Transitions.message}$'),
+                        CallbackQueryHandler(create_support_message, pattern=f'^{Transitions.support_message}$'),
                         CallbackQueryHandler(show_worker_task),
                         MessageHandler(Filters.text, get_deadline),
                     ],
@@ -161,8 +165,14 @@ class Command(BaseCommand):
                         CallbackQueryHandler(handle_role, pattern=f'^{Transitions.client}$'),
                         CallbackQueryHandler(handle_role, pattern=f'^{Transitions.worker}$'),
                         MessageHandler(Filters.text, handle_message),
-
                     ],
+                States.handle_support_message:
+                    [
+                        CallbackQueryHandler(handle_role, pattern=f'^{Transitions.client}$'),
+                        CallbackQueryHandler(handle_role, pattern=f'^{Transitions.worker}$'),
+                        MessageHandler(Filters.text, handle_support_message),
+                    ],
+
                 # States.manager:
                 #     [
                 #         MessageHandler(show_unaccepted)
@@ -531,13 +541,14 @@ def show_client_task(update: Update, context: CallbackContext) -> int:
     query = update.callback_query
     query.answer()
     data = query.data
-    context.user_data['current_task_id'] = int(data)
+    context.user_data['current_task'] = int(data)
     task = Task.objects.get(id=int(data))
     worker = task.worker
-
+    print("А тут?:", context.user_data)
     message = f'Заказ №{task.id}\n\n{task.task}'
     keyboard = [
         [InlineKeyboardButton("В меню", callback_data=str(Transitions.client))],
+        [InlineKeyboardButton("Написать в поддержку", callback_data=str(Transitions.support_message))],
     ]
     if worker:
         message += f"Над вашим заказом работает {worker.name} Вы в любой момент можете связаться с ним"
@@ -583,7 +594,7 @@ def handle_message(update: Update, context: CallbackContext) -> int:
             text=f'Сообщение от Заказчика по вашему заказу №{task.id}:\n {user_message}',
         )
         keyboard = [
-            [InlineKeyboardButton("К заказу", callback_data=str(Transitions.client))],
+            [InlineKeyboardButton("В меню", callback_data=str(Transitions.client))],
         ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     context.bot.send_message(
@@ -592,6 +603,42 @@ def handle_message(update: Update, context: CallbackContext) -> int:
         reply_markup=reply_markup,
     )
     return States.handle_message
+
+
+def create_support_message(update: Update, context: CallbackContext) -> int:
+    query = update.callback_query
+    query.answer()
+    message = 'Введите причину вашего обращения в поддержку и ваше сообщение текстом:'
+    query.message.reply_text(
+        text=message,
+    )
+    return States.handle_support_message
+
+
+def handle_support_message(update: Update, context: CallbackContext) -> int:
+    chat_id = update.effective_chat.id
+    user_message = update.message.text
+    context.user_data['message'] = user_message
+    message = f'Ваше сообщение:\n {user_message}\nДоставлено в поддержку.'
+    user = User.objects.get(tg_id=chat_id)
+    print("Че по инфе:", context.user_data)
+    task = Task.objects.get(id=context.user_data['current_task'])
+
+    if user.role == 'CL':
+        keyboard = [
+            [InlineKeyboardButton("В меню", callback_data=str(Transitions.worker))],
+        ]
+    elif user.role == 'WK':
+        keyboard = [
+            [InlineKeyboardButton("В меню", callback_data=str(Transitions.client))],
+        ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    context.bot.send_message(
+        chat_id,
+        text=message,
+        reply_markup=reply_markup,
+    )
+    return States.handle_support_message
 
 
 def show_available_tasks(update: Update, context: CallbackContext) -> int:
@@ -663,7 +710,8 @@ def show_worker_task(update: Update, context: CallbackContext) -> int:
 
         context.user_data['current_task'] = int(data)
         message = f'Заказ №{task.id}\n\n{task.task}\n'
-        keyboard.append([InlineKeyboardButton("Написать заказчику", callback_data=str(Transitions.message))])
+        keyboard.append([InlineKeyboardButton("Написать заказчику", callback_data=str(Transitions.message))],)
+        keyboard.append([InlineKeyboardButton("Написать в поддержку", callback_data=str(Transitions.support_message))],)
     else:
         context.user_data['current_task'] = int(data)
         message = f'Заказ №{task.id}\n\n{task.task}\n'
