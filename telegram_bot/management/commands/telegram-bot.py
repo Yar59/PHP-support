@@ -71,7 +71,6 @@ class Transitions(Enum):
     tech = auto()
     unaccepted = auto()
     expired = auto()
-    create_message = auto()
     message = auto()
 
 
@@ -302,6 +301,7 @@ def handle_phone(update: Update, context: CallbackContext) -> int:
 def handle_role(update: Update, context: CallbackContext) -> int:
     chat_id = update.effective_chat.id
     user_role = get_user_role(chat_id)
+    print(user_role)
     query = update.callback_query
     query.answer()
     data = query.data
@@ -318,16 +318,19 @@ def handle_role(update: Update, context: CallbackContext) -> int:
         )
         return States.client
     elif data == str(Transitions.worker):
-        keyboard = [
-            [InlineKeyboardButton("Список задач", callback_data=str(Transitions.worklist))],
-            [InlineKeyboardButton("Текущие задачи", callback_data=str(Transitions.current_tasks))],
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        query.message.reply_text(
-            text="Выберете меню",
-            reply_markup=reply_markup,
-        )
-        return States.worker
+        if user_role == "WK":
+            keyboard = [
+                [InlineKeyboardButton("Список задач", callback_data=str(Transitions.worklist))],
+                [InlineKeyboardButton("Текущие задачи", callback_data=str(Transitions.current_tasks))],
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            query.message.reply_text(
+                text="Выберете меню",
+                reply_markup=reply_markup,
+            )
+            return States.worker
+        else:
+            message = "К сожалению вы не исполнитель"
     elif data == str(Transitions.manager):
         if user_role == "Менеджер":
             keyboard = [
@@ -565,7 +568,7 @@ def handle_message(update: Update, context: CallbackContext) -> int:
     message = f'Ваше сообщение:\n {user_message}\nДоставлено'
     user = User.objects.get(tg_id=chat_id)
     task = Task.objects.get(id=context.user_data['current_task'])
-    if user.role == 'Исполнитель':
+    if user.role == 'CL':
         recipient_id = task.client.tg_id
         context.bot.send_message(
             recipient_id,
@@ -574,7 +577,7 @@ def handle_message(update: Update, context: CallbackContext) -> int:
         keyboard = [
             [InlineKeyboardButton("В меню", callback_data=str(Transitions.worker))],
         ]
-    elif user.role == 'Клиент':
+    elif user.role == 'WK':
         recipient_id = task.worker.tg_id
         context.bot.send_message(
             recipient_id,
@@ -648,11 +651,8 @@ def show_worker_task(update: Update, context: CallbackContext) -> int:
     query = update.callback_query
     query.answer()
     data = query.data
-
-    task = Task.objects.get(id=int(data), status=Task.Proc.IN_WORK)
-
+    task = Task.objects.get(id=int(data))
     context.user_data['current_task'] = int(data)
-    message = f'Заказ №{task.id}\n\n{task.task}\n'
     keyboard = [
         [InlineKeyboardButton("В меню", callback_data=str(Transitions.worker))],
     ]
@@ -661,8 +661,13 @@ def show_worker_task(update: Update, context: CallbackContext) -> int:
     except AttributeError:
         worker_id = None
     if worker_id == chat_id:
-        keyboard.append([InlineKeyboardButton("Написать заказчику", callback_data=str(Transitions.create_message))])
+
+        context.user_data['current_task'] = int(data)
+        message = f'Заказ №{task.id}\n\n{task.task}\n'
+        keyboard.append([InlineKeyboardButton("Написать заказчику", callback_data=str(Transitions.message))])
     else:
+        context.user_data['current_task'] = int(data)
+        message = f'Заказ №{task.id}\n\n{task.task}\n'
         message += 'За выполнение заказа вы получите 0$'
         keyboard.append([InlineKeyboardButton("Взять заказ", callback_data=str(Transitions.take))])
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -744,6 +749,7 @@ def get_deadline(update: Update, context: CallbackContext) -> int:
 def take_work(update: Update, context: CallbackContext) -> int:
     chat_id = update.effective_chat.id
     task_id = context.user_data['current_task']
+    print(context.user_data)
     query = update.callback_query
     query.answer()
 
@@ -751,6 +757,7 @@ def take_work(update: Update, context: CallbackContext) -> int:
     task = Task.objects.get(id=task_id)
     task.worker = user
     task.status = task.Proc.IN_WORK
+    task.end_at = context.user_data["end_date"]
     task.save()
     keyboard = [
         [InlineKeyboardButton("К задаче", callback_data=str(task_id))],
