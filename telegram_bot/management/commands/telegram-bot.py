@@ -602,7 +602,7 @@ def show_worker_task(update: Update, context: CallbackContext) -> int:
     data = query.data
 
 
-    task = Task.objects.get(id=int(data), status=Task.Proc.IN_WORK)
+    task = Task.objects.get(id=int(data), status=Task.Proc.WAITING)
 
     context.user_data['current_task'] = int(data)
     message = f'Заказ №{task.id}\n\n{task.task}\n'
@@ -697,6 +697,7 @@ def get_deadline(update: Update, context: CallbackContext) -> int:
 def take_work(update: Update, context: CallbackContext) -> int:
     chat_id = update.effective_chat.id
     task_id = context.user_data['current_task']
+    print(context.user_data)
     query = update.callback_query
     query.answer()
 
@@ -704,6 +705,7 @@ def take_work(update: Update, context: CallbackContext) -> int:
     task = Task.objects.get(id=task_id)
     task.worker = user
     task.status = task.Proc.IN_WORK
+    task.end_at = context.user_data["end_date"]
     task.save()
     keyboard = [
         [InlineKeyboardButton("К задаче", callback_data=str(task_id))],
