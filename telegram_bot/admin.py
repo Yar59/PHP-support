@@ -23,7 +23,12 @@ class SupportionInline(admin.TabularInline):
 
 @admin.register(User)
 class ProductAdmin(admin.ModelAdmin):
-    search_fields = ['phonenumber']
+    search_fields = [
+        'name',
+        'phonenumber',
+        'role',
+    ]
+    ordering = ['name', 'role', ]
 
     inlines = [SubscriptionInline, MessageFirstInline, MessagSecondInline, SupportionInline]
 
@@ -31,7 +36,9 @@ class ProductAdmin(admin.ModelAdmin):
 @admin.register(Task)
 class TaskAdmin(admin.ModelAdmin):
     search_fields = [
-        'client'
-        'task'
-        'status'
+        'worker',
+        'client',
+        'task',
+        'status',
     ]
+    ordering = ['status', 'task', ]
