@@ -588,7 +588,7 @@ def handle_message(update: Update, context: CallbackContext) -> int:
             text=f'Сообщение от Исполниеля по вашему заказу №{task.id}:\n {user_message}',
         )
         keyboard = [
-            [InlineKeyboardButton("В меню", callback_data=str(Transitions.worker))],
+            [InlineKeyboardButton("В меню", callback_data=str(Transitions.client))],
         ]
     elif user.role == 'WK':
         recipient_id = task.worker.tg_id
@@ -598,7 +598,7 @@ def handle_message(update: Update, context: CallbackContext) -> int:
             text=f'Сообщение от Заказчика по вашему заказу №{task.id}:\n {user_message}',
         )
         keyboard = [
-            [InlineKeyboardButton("В меню", callback_data=str(Transitions.client))],
+            [InlineKeyboardButton("В меню", callback_data=str(Transitions.worker))],
         ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     context.bot.send_message(
@@ -810,7 +810,7 @@ def take_work(update: Update, context: CallbackContext) -> int:
     task.save()
     keyboard = [
         [InlineKeyboardButton("К задаче", callback_data=str(task_id))],
-        [InlineKeyboardButton("В меню", callback_data=str(Transitions.take))],
+        [InlineKeyboardButton("В меню", callback_data=str(Transitions.worker))],
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     query.message.reply_text(
