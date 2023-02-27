@@ -600,22 +600,25 @@ def show_worker_task(update: Update, context: CallbackContext) -> int:
     query = update.callback_query
     query.answer()
     data = query.data
-
-
-    task = Task.objects.get(id=int(data), status=Task.Proc.WAITING)
-
-    context.user_data['current_task'] = int(data)
-    message = f'Заказ №{task.id}\n\n{task.task}\n'
+    tasko = Task.objects.get(id=int(data))
     keyboard = [
         [InlineKeyboardButton("В меню", callback_data=str(Transitions.worker))],
     ]
     try:
-        worker_id = task.worker.tg_id
+        worker_id = tasko.worker.tg_id
     except AttributeError:
         worker_id = None
     if worker_id == chat_id:
+        taske = Task.objects.get(id=int(data), status=Task.Proc.IN_WORK)
+
+        context.user_data['current_task'] = int(data)
+        message = f'Заказ №{taske.id}\n\n{taske.task}\n'
         keyboard.append([InlineKeyboardButton("Написать заказчику", callback_data=str(Transitions.create_message))])
     else:
+        taske = Task.objects.get(id=int(data), status=Task.Proc.WAITING)
+
+        context.user_data['current_task'] = int(data)
+        message = f'Заказ №{taske.id}\n\n{taske.task}\n'
         message += 'За выполнение заказа вы получите 0$'
         keyboard.append([InlineKeyboardButton("Взять заказ", callback_data=str(Transitions.take))])
     reply_markup = InlineKeyboardMarkup(keyboard)
