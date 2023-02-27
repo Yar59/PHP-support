@@ -66,6 +66,9 @@ class Transitions(Enum):
     worklist = auto()
     current_tasks = auto()
     take = auto()
+    tech = auto()
+    unaccepted = auto()
+    expired = auto()
 
 
 class Command(BaseCommand):
@@ -144,10 +147,11 @@ class Command(BaseCommand):
                     [
                         [InlineKeyboardButton(choose_task_list, callback_data=str(Transitions.current_tasks))],
                     ],
-                # States.take_work:
-                #     [
-                #         [InlineKeyboardButton(take_work, callback_data=str(Transitions.current_tasks))],
-                #     ],    
+                States.manager:
+                    [   
+                        MessageHandler(show_unaccepted)
+                        [InlineKeyboardButton(show_unaccepted, callback_data=str(Transitions.manager))],
+                    ],    
 
             },
             fallbacks=[
@@ -309,8 +313,16 @@ def handle_role(update: Update, context: CallbackContext) -> int:
         return States.worker
     elif data == str(Transitions.manager):
         if user_role == "Менеджер":
-            pass
-            # TODO: Показать клаву манагера
+            keyboard = [
+                [InlineKeyboardButton("Обращение в техподдержку", callback_data=str(Transitions.tech))],
+                [InlineKeyboardButton("Непринятые заказы", callback_data=str(Transitions.unaccepted))],
+                [InlineKeyboardButton("Заказы с истекшим сроком", callback_data=str(Transitions.expired))],
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            query.message.reply_text(
+                text="Выберете меню",
+                reply_markup=reply_markup,
+            )
             return States.manager
         else:
             message = "К сожалению, вы не менеджер"
@@ -596,6 +608,22 @@ def choose_task_list(update: Update, context: CallbackContext) -> int:
 #         reply_markup=reply_markup,
 #     )
 #     return States.current_work
+
+
+def show_unaccepted(update: Update, context: CallbackContext) -> int:
+    chat_id = update.effective_chat.id
+    tasks = Task.objects.filter(status="WAIT")
+    message = f'Непринятые задачи найдены\n\n{tasks}\n\n '
+    keyboard = [
+        [InlineKeyboardButton("В меню менеджера", callback_data=str(Transitions.manager))],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    context.bot.send_message(
+        chat_id,
+        text=message,
+        reply_markup=reply_markup,
+    )
+    return States.handle_task
 
 
 def cancel(update: Update, context: CallbackContext) -> int:
