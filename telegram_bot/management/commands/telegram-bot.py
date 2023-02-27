@@ -864,7 +864,19 @@ def show_task_details(update: Update, context: CallbackContext) -> int:
 
 
 def show_support_messages(update: Update, context: CallbackContext) -> int:
-    pass
+    query = update.callback_query
+    query.answer()
+    messages = Support.objects.all().order_by('-created_at')
+    keyboard = [
+        [InlineKeyboardButton("В меню", callback_data=str(Transitions.worker))],
+    ]
+    message = 'Обращения в поддержку:'.join([f'Заказ №{support_message.task.id} {support_message.text[:30]}' for support_message in messages])
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    query.message.reply_text(
+        text=message,
+        reply_markup=reply_markup,
+    )
+    return States.show_worker_tasks
 
 
 def show_expired(update: Update, context: CallbackContext) -> int:
