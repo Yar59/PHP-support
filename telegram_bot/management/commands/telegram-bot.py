@@ -1,3 +1,4 @@
+import datetime
 import logging
 from enum import Enum, auto
 from textwrap import dedent
@@ -142,8 +143,16 @@ class Command(BaseCommand):
                 States.show_worker_tasks:
                     [
                         CallbackQueryHandler(handle_role, pattern=f'^{Transitions.worker}$'),
-                        CallbackQueryHandler(take_work, pattern=f'^{Transitions.take}$'),
+                        CallbackQueryHandler(get_deadline, pattern=f'^{Transitions.take}$'),
                         CallbackQueryHandler(show_worker_task),
+                        MessageHandler(Filters.text, get_deadline),
+                    ],
+                States.work_choose:
+                    [
+                        CallbackQueryHandler(handle_role, pattern=f'^{Transitions.worker}$'),
+                        CallbackQueryHandler(take_work, pattern=f'^{Transitions.take}$'),
+                        MessageHandler(Filters.text, get_deadline),
+
                     ],
                 # States.manager:
                 #     [
@@ -584,7 +593,7 @@ def show_worker_task(update: Update, context: CallbackContext) -> int:
 
     task = Task.objects.get(id=int(data))
     context.user_data['current_task'] = int(data)
-    message = f'Заказ №{task.id}\n\n{task.task}'
+    message = f'Заказ №{task.id}\n\n{task.task}\n'
     keyboard = [
         [InlineKeyboardButton("В меню", callback_data=str(Transitions.worker))],
     ]
@@ -595,6 +604,7 @@ def show_worker_task(update: Update, context: CallbackContext) -> int:
     if worker_id == chat_id:
         keyboard.append([InlineKeyboardButton("Написать заказчику", callback_data=str(Transitions.create_message))])
     else:
+        message += 'За выполнение заказа вы получите 0$'
         keyboard.append([InlineKeyboardButton("Взять заказ", callback_data=str(Transitions.take))])
     reply_markup = InlineKeyboardMarkup(keyboard)
     query.message.reply_text(
@@ -634,24 +644,63 @@ def show_worker_task(update: Update, context: CallbackContext) -> int:
 #     return States.work_choose
 
 
+def get_deadline(update: Update, context: CallbackContext) -> int:
+    chat_id = update.effective_chat.id
+    try:
+        raw_date = update.message.text
+    except AttributeError:
+        raw_date = None
+    if raw_date:
+        try:
+            date = datetime.datetime.strptime(raw_date, "%d.%m.%y")
+            message = dedent(
+                f'''
+                Необходимо выполнить этот заказ до {raw_date},
+                Подтвердите принятие заказа
+                '''
+            )
+            keyboard = [
+                [InlineKeyboardButton("Подтвердить", callback_data=str(Transitions.take))],
+                [InlineKeyboardButton("В меню", callback_data=str(Transitions.worker))],
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            context.bot.send_message(
+                chat_id,
+                text=message,
+                reply_markup=reply_markup,
+            )
+            return States.work_choose
+        except:
+            message = "Неверная дата.\n Введите дату в формате дд.мм.гг"
+    else:
+        message = "Введите дату окончания работы в формате дд.мм.гг"
+    context.bot.send_message(
+        chat_id,
+        text=message,
+    )
+    return States.show_worker_tasks
+
+
 def take_work(update: Update, context: CallbackContext) -> int:
     chat_id = update.effective_chat.id
     task_id = context.user_data['current_task']
     query = update.callback_query
     query.answer()
-    data = query.data
+
     user = User.objects.get(tg_id=chat_id)
     task = Task.objects.get(id=task_id)
+    task.worker = user
+    task.save()
     keyboard = [
-        [InlineKeyboardButton("Назад", callback_data=str(Transitions.worklist))],
-        [InlineKeyboardButton("Взять", callback_data=str(Transitions.take))],
+        [InlineKeyboardButton("К задаче", callback_data=str(task_id))],
+        [InlineKeyboardButton("В меню", callback_data=str(Transitions.take))],
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     query.message.reply_text(
-        text="Выберете задачу",
+        text="Теперь вы можете связаться с заказчиком и задать ему уточняющие вопросы",
         reply_markup=reply_markup,
     )
-    return States.current_work
+    return States.show_worker_tasks
 
 
 def show_unaccepted(update: Update, context: CallbackContext) -> int:
