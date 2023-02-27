@@ -52,6 +52,7 @@ class States(Enum):
     work_choose = auto()
     show_worker_tasks = auto()
     take_work = auto()
+    handle_message = auto()
 
 
 class Transitions(Enum):
@@ -134,6 +135,7 @@ class Command(BaseCommand):
                 States.show_client_tasks:
                     [
                         CallbackQueryHandler(handle_role, pattern=f'^{Transitions.client}$'),
+                        CallbackQueryHandler(create_message, pattern=f'^{Transitions.message}$'),
                         CallbackQueryHandler(show_client_task),
                     ],
                 States.worker:
@@ -145,6 +147,7 @@ class Command(BaseCommand):
                     [
                         CallbackQueryHandler(handle_role, pattern=f'^{Transitions.worker}$'),
                         CallbackQueryHandler(get_deadline, pattern=f'^{Transitions.take}$'),
+                        CallbackQueryHandler(create_message, pattern=f'^{Transitions.message}$'),
                         CallbackQueryHandler(show_worker_task),
                         MessageHandler(Filters.text, get_deadline),
                     ],
@@ -153,6 +156,12 @@ class Command(BaseCommand):
                         CallbackQueryHandler(handle_role, pattern=f'^{Transitions.worker}$'),
                         CallbackQueryHandler(take_work, pattern=f'^{Transitions.take}$'),
                         MessageHandler(Filters.text, get_deadline),
+                    ],
+                States.handle_message:
+                    [
+                        CallbackQueryHandler(handle_role, pattern=f'^{Transitions.client}$'),
+                        CallbackQueryHandler(handle_role, pattern=f'^{Transitions.worker}$'),
+                        MessageHandler(Filters.text, handle_message),
 
                     ],
                 # States.manager:
@@ -520,7 +529,7 @@ def show_client_task(update: Update, context: CallbackContext) -> int:
     query = update.callback_query
     query.answer()
     data = query.data
-    
+    context.user_data['current_task_id'] = int(data)
     task = Task.objects.get(id=int(data))
     worker = task.worker
 
@@ -540,8 +549,47 @@ def show_client_task(update: Update, context: CallbackContext) -> int:
 
 
 def create_message(update: Update, context: CallbackContext) -> int:
+    query = update.callback_query
+    query.answer()
+    message = 'Введите ваше сообщение текстом:'
+    query.message.reply_text(
+        text=message,
+    )
+    return States.handle_message
+
+
+def handle_message(update: Update, context: CallbackContext) -> int:
     chat_id = update.effective_chat.id
-    pass
+    user_message = update.message.text
+    context.user_data['message'] = user_message
+    message = f'Ваше сообщение:\n {user_message}\nДоставлено'
+    user = User.objects.get(tg_id=chat_id)
+    task = Task.objects.get(id=context.user_data['current_task'])
+    if user.role == 'Исполнитель':
+        recipient_id = task.client.tg_id
+        context.bot.send_message(
+            recipient_id,
+            text=f'Сообщение от Исполниеля по вашему заказу №{task.id}:\n {user_message}',
+        )
+        keyboard = [
+            [InlineKeyboardButton("В меню", callback_data=str(Transitions.worker))],
+        ]
+    elif user.role == 'Клиент':
+        recipient_id = task.worker.tg_id
+        context.bot.send_message(
+            recipient_id,
+            text=f'Сообщение от Заказчика по вашему заказу №{task.id}:\n {user_message}',
+        )
+        keyboard = [
+            [InlineKeyboardButton("К заказу", callback_data=str(Transitions.client))],
+        ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    context.bot.send_message(
+        chat_id,
+        text=message,
+        reply_markup=reply_markup,
+    )
+    return States.handle_message
 
 
 def show_available_tasks(update: Update, context: CallbackContext) -> int:
@@ -600,7 +648,6 @@ def show_worker_task(update: Update, context: CallbackContext) -> int:
     query = update.callback_query
     query.answer()
     data = query.data
-
 
     task = Task.objects.get(id=int(data), status=Task.Proc.IN_WORK)
 
