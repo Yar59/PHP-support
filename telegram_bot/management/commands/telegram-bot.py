@@ -591,7 +591,7 @@ def show_worker_task(update: Update, context: CallbackContext) -> int:
     query.answer()
     data = query.data
 
-    task = Task.objects.get(id=int(float(data)), status=Task.Proc.WAITING)
+    task = Task.objects.get(id=int(data), status=Task.Proc.WAITING)
     context.user_data['current_task'] = int(data)
     message = f'Заказ №{task.id}\n\n{task.task}\n'
     keyboard = [
