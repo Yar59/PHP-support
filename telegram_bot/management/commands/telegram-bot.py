@@ -173,11 +173,14 @@ class Command(BaseCommand):
                         MessageHandler(Filters.text, handle_support_message),
                     ],
 
-                # States.manager:
-                #     [
-                #         MessageHandler(show_unaccepted)
-                #         [InlineKeyboardButton(show_unaccepted, callback_data=str(Transitions.manager))],
-                #     ],
+                States.manager:
+                    [
+                        CallbackQueryHandler(handle_role, pattern=f'^{Transitions.manager}$'),
+                        CallbackQueryHandler(show_support_messages, pattern=f'^{Transitions.tech}$'),
+                        CallbackQueryHandler(show_unaccepted, pattern=f'^{Transitions.unaccepted}$'),
+                        CallbackQueryHandler(show_expired, pattern=f'^{Transitions.expired}$'),
+                        CallbackQueryHandler(show_task_details),
+                    ],
 
             },
             fallbacks=[
@@ -341,9 +344,9 @@ def handle_role(update: Update, context: CallbackContext) -> int:
         else:
             message = "К сожалению вы не исполнитель"
     elif data == str(Transitions.manager):
-        if user_role == "Менеджер":
+        if user_role == "MNG":
             keyboard = [
-                [InlineKeyboardButton("Обращение в техподдержку", callback_data=str(Transitions.tech))],
+                [InlineKeyboardButton("Обращения в техподдержку", callback_data=str(Transitions.tech))],
                 [InlineKeyboardButton("Непринятые заказы", callback_data=str(Transitions.unaccepted))],
                 [InlineKeyboardButton("Заказы с истекшим сроком", callback_data=str(Transitions.expired))],
             ]
@@ -818,17 +821,68 @@ def take_work(update: Update, context: CallbackContext) -> int:
 def show_unaccepted(update: Update, context: CallbackContext) -> int:
     chat_id = update.effective_chat.id
     tasks = Task.objects.filter(status="WAIT")
-    message = f'Непринятые задачи найдены\n\n{tasks}\n\n '
+    message = f'Непринятые задачи найдены\n\n'
     keyboard = [
-        [InlineKeyboardButton("В меню менеджера", callback_data=str(Transitions.manager))],
+        [InlineKeyboardButton("В меню", callback_data=str(Transitions.manager))],
     ]
+    for task in tasks:
+        message += f'Заказ №{task.id}, {task.task[:30]}\n\n'
+        keyboard.append([InlineKeyboardButton(f"К заказу {task.id}", callback_data=str(task.id))])
     reply_markup = InlineKeyboardMarkup(keyboard)
     context.bot.send_message(
         chat_id,
         text=message,
         reply_markup=reply_markup,
     )
-    return States.handle_task
+    return States.manager
+
+
+def show_task_details(update: Update, context: CallbackContext) -> int:
+    query = update.callback_query
+    query.answer()
+    data = query.data
+    task = Task.objects.get(id=int(data))
+    context.user_data['current_task'] = int(data)
+    keyboard = [
+        [InlineKeyboardButton("В меню", callback_data=str(Transitions.worker))],
+    ]
+    context.user_data['current_task'] = int(data)
+    message = dedent(f'''Заказ №{task.id}\n\n{task.task}
+        Заказчик: {task.client.name}
+        id_заказчика: {task.client.tg_id}
+        Создана: {task.created_at}
+    ''')
+    if task.worker:
+        message += f'Исполнитель: {task.worker}\nid_исполнителя: {task.worker.tg_id}\nдолжен завершить: {task.end_at}'
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    query.message.reply_text(
+        text=message,
+        reply_markup=reply_markup,
+    )
+    return States.show_worker_tasks
+
+
+def show_support_messages(update: Update, context: CallbackContext) -> int:
+    pass
+
+
+def show_expired(update: Update, context: CallbackContext) -> int:
+    chat_id = update.effective_chat.id
+    tasks = Task.objects.filter(end_at__lte=timezone.now())
+    message = f'Задачи с истекшим дедлайном:\n\n'
+    keyboard = [
+        [InlineKeyboardButton("В меню", callback_data=str(Transitions.manager))],
+    ]
+    for task in tasks:
+        message += f'Заказ №{task.id}, {task.task[:30]}\n\n'
+        keyboard.append([InlineKeyboardButton(f"К заказу {task.id}", callback_data=str(task.id))])
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    context.bot.send_message(
+        chat_id,
+        text=message,
+        reply_markup=reply_markup,
+    )
+    return States.manager
 
 
 def cancel(update: Update, context: CallbackContext) -> int:
