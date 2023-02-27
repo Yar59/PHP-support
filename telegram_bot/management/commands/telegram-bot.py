@@ -301,7 +301,6 @@ def handle_phone(update: Update, context: CallbackContext) -> int:
 def handle_role(update: Update, context: CallbackContext) -> int:
     chat_id = update.effective_chat.id
     user_role = get_user_role(chat_id)
-    print(user_role)
     query = update.callback_query
     query.answer()
     data = query.data
