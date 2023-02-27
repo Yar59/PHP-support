@@ -24,7 +24,7 @@ from django.core.management.base import BaseCommand
 from django.conf import settings
 from django.utils import timezone
 
-from telegram_bot.models import User, Subscription, Task
+from telegram_bot.models import User, Subscription, Task, Message, Support
 from telegram_bot.data_operations import (
     is_new_user,
     save_user_data,
@@ -621,7 +621,7 @@ def handle_support_message(update: Update, context: CallbackContext) -> int:
     message = f'Ваше сообщение:\n {user_message}\nДоставлено в поддержку.'
     user = User.objects.get(tg_id=chat_id)
     task = Task.objects.get(id=context.user_data['current_task'])
-
+    Support.objects.create(user=user, task=task, created_at=timezone.now(), text=user_message)
     if user.role == 'CL':
         keyboard = [
             [InlineKeyboardButton("В меню", callback_data=str(Transitions.worker))],

@@ -42,3 +42,13 @@ class TaskAdmin(admin.ModelAdmin):
         'status',
     ]
     ordering = ['status', 'task', ]
+
+
+@admin.register(Message)
+class MessageAdmin(admin.ModelAdmin):
+    pass
+
+
+@admin.register(Support)
+class SupportMessageAdmin(admin.ModelAdmin):
+    pass
