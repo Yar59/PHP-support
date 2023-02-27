@@ -68,6 +68,7 @@ class Task(models.Model):
     class Proc(models.TextChoices):
         WAITING = "WAIT", "Ожидает принятия"
         IN_WORK = "WORK", "В работе"
+        WAIT_CONFIRM = "WAIT_CONFIRM", "Ожидает подтверждения"
         DONE = "DONE", "Завершена"
 
     status = models.CharField(

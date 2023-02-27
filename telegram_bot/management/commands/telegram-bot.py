@@ -54,6 +54,8 @@ class States(Enum):
     take_work = auto()
     handle_message = auto()
     handle_support_message = auto()
+    worker_confirm = auto()
+    client_confirm = auto()
 
 
 class Transitions(Enum):
@@ -74,6 +76,7 @@ class Transitions(Enum):
     expired = auto()
     message = auto()
     support_message = auto()
+    confirm = auto()
 
 
 class Command(BaseCommand):
@@ -138,6 +141,7 @@ class Command(BaseCommand):
                         CallbackQueryHandler(handle_role, pattern=f'^{Transitions.client}$'),
                         CallbackQueryHandler(create_message, pattern=f'^{Transitions.message}$'),
                         CallbackQueryHandler(create_support_message, pattern=f'^{Transitions.support_message}$'),
+                        CallbackQueryHandler(client_confirm, pattern=f'^{Transitions.confirm}$'),
                         CallbackQueryHandler(show_client_task),
                     ],
                 States.worker:
@@ -151,6 +155,7 @@ class Command(BaseCommand):
                         CallbackQueryHandler(get_deadline, pattern=f'^{Transitions.take}$'),
                         CallbackQueryHandler(create_message, pattern=f'^{Transitions.message}$'),
                         CallbackQueryHandler(create_support_message, pattern=f'^{Transitions.support_message}$'),
+                        CallbackQueryHandler(worker_confirm, pattern=f'^{Transitions.confirm}$'),
                         CallbackQueryHandler(show_worker_task),
                         MessageHandler(Filters.text, get_deadline),
                     ],
@@ -181,7 +186,18 @@ class Command(BaseCommand):
                         CallbackQueryHandler(show_expired, pattern=f'^{Transitions.expired}$'),
                         CallbackQueryHandler(show_task_details),
                     ],
-
+                States.client_confirm:
+                    [
+                        CallbackQueryHandler(handle_role, pattern=f'^{Transitions.client}$'),
+                        CallbackQueryHandler(client_confirm_task, pattern=f'^{Transitions.confirm}$'),
+                        MessageHandler(Filters.text, client_confirm_task),
+                    ],
+                States.worker_confirm:
+                    [
+                        CallbackQueryHandler(handle_role, pattern=f'^{Transitions.worker}$'),
+                        CallbackQueryHandler(worker_confirm_task, pattern=f'^{Transitions.confirm}$'),
+                        MessageHandler(Filters.text, worker_confirm_task),
+                    ],
             },
             fallbacks=[
                 CommandHandler('cancel', cancel),
@@ -555,6 +571,10 @@ def show_client_task(update: Update, context: CallbackContext) -> int:
     if worker:
         message += f"Над вашим заказом работает {worker.name} Вы в любой момент можете связаться с ним"
         keyboard.append([InlineKeyboardButton("Написать исполнителю", callback_data=str(Transitions.message))],)
+    if task.status == 'WAIT_CONFIRM':
+        keyboard.append([InlineKeyboardButton("Подтвердить выполнение", callback_data=str(Transitions.confirm))], )
+    if task.status == 'DONE':
+        message += '\n\nВы подтвердили выполнение'
     reply_markup = InlineKeyboardMarkup(keyboard)
     query.message.reply_text(
         text=message,
@@ -680,7 +700,7 @@ def show_worker_tasks(update: Update, context: CallbackContext) -> int:
         [InlineKeyboardButton("В меню", callback_data=str(Transitions.worker))],
     ]
     if len(tasks_in_work):
-        message = "Задачи в работе:\n\n"
+        message = "Ваши задачи:\n\n"
         for task in tasks_in_work:
             message += f'Заказ №{task.id}, {task.task[:30]}\n\n'
             keyboard.append([InlineKeyboardButton(f"К заказу {task.id}", callback_data=str(task.id))])
@@ -715,6 +735,12 @@ def show_worker_task(update: Update, context: CallbackContext) -> int:
         message = f'Заказ №{task.id}\n\n{task.task}\n'
         keyboard.append([InlineKeyboardButton("Написать заказчику", callback_data=str(Transitions.message))],)
         keyboard.append([InlineKeyboardButton("Написать в поддержку", callback_data=str(Transitions.support_message))],)
+        if task.status == 'WAIT_CONFIRM':
+            message += '\nОжидает принятия заказчиком'
+        else:
+            keyboard.append([InlineKeyboardButton("Сдать задачу", callback_data=str(Transitions.confirm))], )
+        if task.status == 'DONE':
+            message += '\nЗаказчик подтвердил выполнение'
     else:
         context.user_data['current_task'] = int(data)
         message = f'Заказ №{task.id}\n\n{task.task}\n'
@@ -727,35 +753,83 @@ def show_worker_task(update: Update, context: CallbackContext) -> int:
     )
     return States.show_worker_tasks
 
-# def choose_task_list(update: Update, context: CallbackContext) -> int:
-#     user_id = update.effective_user.id
-#     tasks = Task.objects.filter(status="WAIT")
-#     phone = update.message.contact.phone_number
-#     query = update.callback_query
-#     query.answer()
-#     data = query.data
-#     if data == str(Transitions.worklist):
-#         if len(tasks):
-#             for task in tasks:
-#                 keyboard = [
-#                     [InlineKeyboardButton("Взять", callback_data=str(Transitions.take))],
-#                 ]
-#                 message = "Возьмите задание",
-#
-#             return States.work_choose
-#         else:
-#             keyboard = [
-#                 [InlineKeyboardButton("Назад", callback_data=str(Transitions.worklist))],
-#             ]
-#             message = "Нам очень жаль, но на данный момент задачи отсутствуют"
-#     if data == str(Transitions.take):
-#         Task.objects.create(user__number=phone)
-#     reply_markup = InlineKeyboardMarkup(keyboard)
-#     query.message.reply_text(
-#         text=message,
-#         reply_markup=reply_markup,
-#     )
-#     return States.work_choose
+
+def client_confirm(update: Update, context: CallbackContext) -> int:
+    query = update.callback_query
+    query.answer()
+    task = Task.objects.get(id=context.user_data['current_task'])
+    message = f'Вы подтверждаете выполнение задачи №{task.id}'
+    keyboard = [
+        [InlineKeyboardButton("Подтвердить", callback_data=str(Transitions.confirm))],
+        [InlineKeyboardButton("В меню", callback_data=str(Transitions.client))],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    query.message.reply_text(
+        text=message,
+        reply_markup=reply_markup,
+    )
+    return States.client_confirm
+
+
+def client_confirm_task(update: Update, context: CallbackContext) -> int:
+    query = update.callback_query
+    query.answer()
+    task = Task.objects.get(id=context.user_data['current_task'])
+    task.status = 'DONE'
+    task.save()
+    message = f'Вы подтвердили выполнение задачи №{task.id}'
+    keyboard = [
+        [InlineKeyboardButton("В меню", callback_data=str(Transitions.client))],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    query.message.reply_text(
+        text=message,
+        reply_markup=reply_markup,
+    )
+    return States.client_confirm
+
+
+def worker_confirm(update: Update, context: CallbackContext) -> int:
+    query = update.callback_query
+    query.answer()
+    task = Task.objects.get(id=context.user_data['current_task'])
+    message = f'Отправьте результат выполнения задачи №{task.id} текстом'
+    keyboard = [
+        [InlineKeyboardButton("В меню", callback_data=str(Transitions.worker))],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    query.message.reply_text(
+        text=message,
+        reply_markup=reply_markup,
+    )
+    return States.worker_confirm
+
+
+def worker_confirm_task(update: Update, context: CallbackContext) -> int:
+    chat_id = update.effective_chat.id
+    try:
+        text = update.message.text
+    except AttributeError:
+        text = None
+    if text:
+        task = Task.objects.get(id=context.user_data['current_task'])
+        task.task += f'\nЗадача выполнена:\n{text}'
+        task.status = 'WAIT_CONFIRM'
+        task.save()
+        message = f'Вы подтвердили выполнение задачи №{task.id}\n Ожидаем подтверждения заказчиком'
+
+    else:
+        message = "Попробуйте снова"
+    keyboard = [
+        [InlineKeyboardButton("В меню", callback_data=str(Transitions.worker))],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    context.bot.send_message(
+        chat_id,
+        text=message,
+        reply_markup=reply_markup,
+    )
+    return States.worker_confirm
 
 
 def get_deadline(update: Update, context: CallbackContext) -> int:
