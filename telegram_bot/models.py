@@ -25,6 +25,7 @@ class User(models.Model):
     phonenumber = PhoneNumberField('Контактный номер', region="RU", )
 
     class Meta:
+        ordering = ['name']
         verbose_name = 'Пользователь'
         verbose_name_plural = 'Пользователи'
 
@@ -55,6 +56,7 @@ class Subscription(models.Model):
     end_at = models.DateTimeField('Конец подписки')
 
     class Meta:
+        ordering = ['starts_at']
         verbose_name = 'Подписка'
         verbose_name_plural = 'Подписки'
 
@@ -99,6 +101,7 @@ class Task(models.Model):
     )
 
     class Meta:
+        ordering = ['created_at']
         verbose_name = 'Задание'
         verbose_name_plural = 'Задания'
 

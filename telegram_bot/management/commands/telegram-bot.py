@@ -71,6 +71,7 @@ class Transitions(Enum):
     unaccepted = auto()
     expired = auto()
     create_message = auto()
+    message = auto()
 
 
 class Command(BaseCommand):
@@ -519,19 +520,28 @@ def show_client_task(update: Update, context: CallbackContext) -> int:
     query = update.callback_query
     query.answer()
     data = query.data
-
+    
     task = Task.objects.get(id=int(data))
+    worker = task.worker
 
     message = f'Заказ №{task.id}\n\n{task.task}'
     keyboard = [
         [InlineKeyboardButton("В меню", callback_data=str(Transitions.client))],
     ]
+    if worker:
+        message += f"Над вашим заказом работает {worker.name} Вы в любой момент можете связаться с ним"
+        keyboard.append([InlineKeyboardButton("Написать исполнителю", callback_data=str(Transitions.message))],)
     reply_markup = InlineKeyboardMarkup(keyboard)
     query.message.reply_text(
         text=message,
         reply_markup=reply_markup,
     )
     return States.show_client_tasks
+
+
+def create_message(update: Update, context: CallbackContext) -> int:
+    chat_id = update.effective_chat.id
+    pass
 
 
 def show_available_tasks(update: Update, context: CallbackContext) -> int:
@@ -591,7 +601,9 @@ def show_worker_task(update: Update, context: CallbackContext) -> int:
     query.answer()
     data = query.data
 
-    task = Task.objects.get(id=int(data))
+
+    task = Task.objects.get(id=int(data), status=Task.Proc.IN_WORK)
+
     context.user_data['current_task'] = int(data)
     message = f'Заказ №{task.id}\n\n{task.task}\n'
     keyboard = [
@@ -653,6 +665,7 @@ def get_deadline(update: Update, context: CallbackContext) -> int:
     if raw_date:
         try:
             date = datetime.datetime.strptime(raw_date, "%d.%m.%y")
+            context.user_data["end_date"] = date
             message = dedent(
                 f'''
                 Необходимо выполнить этот заказ до {raw_date},
@@ -690,6 +703,7 @@ def take_work(update: Update, context: CallbackContext) -> int:
     user = User.objects.get(tg_id=chat_id)
     task = Task.objects.get(id=task_id)
     task.worker = user
+    task.status = task.Proc.IN_WORK
     task.save()
     keyboard = [
         [InlineKeyboardButton("К задаче", callback_data=str(task_id))],
