@@ -844,7 +844,6 @@ def show_task_details(update: Update, context: CallbackContext) -> int:
     query.answer()
     data = query.data
     task = Task.objects.get(id=int(data))
-    context.user_data['current_task'] = int(data)
     keyboard = [
         [InlineKeyboardButton("В меню", callback_data=str(Transitions.worker))],
     ]
