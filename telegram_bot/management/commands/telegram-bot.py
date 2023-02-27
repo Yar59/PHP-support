@@ -544,7 +544,6 @@ def show_client_task(update: Update, context: CallbackContext) -> int:
     context.user_data['current_task'] = int(data)
     task = Task.objects.get(id=int(data))
     worker = task.worker
-    print("А тут?:", context.user_data)
     message = f'Заказ №{task.id}\n\n{task.task}'
     keyboard = [
         [InlineKeyboardButton("В меню", callback_data=str(Transitions.client))],
@@ -621,7 +620,6 @@ def handle_support_message(update: Update, context: CallbackContext) -> int:
     context.user_data['message'] = user_message
     message = f'Ваше сообщение:\n {user_message}\nДоставлено в поддержку.'
     user = User.objects.get(tg_id=chat_id)
-    print("Че по инфе:", context.user_data)
     task = Task.objects.get(id=context.user_data['current_task'])
 
     if user.role == 'CL':
@@ -796,7 +794,6 @@ def get_deadline(update: Update, context: CallbackContext) -> int:
 def take_work(update: Update, context: CallbackContext) -> int:
     chat_id = update.effective_chat.id
     task_id = context.user_data['current_task']
-    print(context.user_data)
     query = update.callback_query
     query.answer()
 
